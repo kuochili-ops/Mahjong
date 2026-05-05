@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>White 6 台灣麻將 - 跨儲存庫對齊版</title>
+    <style>
+        :root {
+            --bg-table: #2e7d32;
+            /* 經過精確計算，抵消 SVG 留白後的實體牌面寬度 */
+            --back-w: 23px; 
+            --back-h: 33px;
+            --blue-back: #1565c0;
+            --tile-gap: 2px;
+        }
+
+        body {
+            background-color: var(--bg-table);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            font-family: sans-serif;
+            color: white;
+            overflow: hidden;
+        }
+
+        .status-bar {
+            margin-top: 30px;
+            background: rgba(0,0,0,0.5);
+            padding: 10px 40px;
+            border-radius: 30px;
+            font-size: 1.1rem;
+        }
+
+        .mahjong-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            width: 100%;
+            max-width: 500px;
+            padding: 50px 10px;
+            box-sizing: border-box;
+        }
+
+        .hand {
+            display: flex;
+            justify-content: center;
+            gap: var(--tile-gap);
+            min-height: 50px;
+            align-items: center;
+        }
+
+        /* 玩家正面：使用負邊距抵消透明邊框，使白色牌身對齊上方藍色背面 */
+        .tile {
+            width: 28px; /* 圖片容器尺寸 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.2s;
+            margin: 0 -1.5px; /* 關鍵：縮小圖片間的透明縫隙 */
+        }
+
+        .tile img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .tile:hover {
+            transform: translateY(-10px);
+        }
+
+        /* 電腦牌背：與正面白色部分實體對齊 */
+        .cpu-tile {
+            width: var(--back-w);
+            height: var(--back-h);
+            background-color: var(--blue-back);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            border-radius: 2px;
+            box-shadow: 0 2px 3px rgba(0,0,0,0.4);
+            box-sizing: border-box;
+            position: relative;
+        }
+
+        .cpu-tile::after {
+            content: '';
+            position: absolute;
+            top: 2px; left: 2px; right: 2px; bottom: 2px;
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 1px;
+        }
+
+        .discard-area {
+            background: rgba(0,0,0,0.08);
+            border-radius: 15px;
+            min-height: 180px;
+        }
+
+        .draw-gap { margin-left: 12px; }
+
+        .btn-reset {
+            margin-bottom: 40px;
+            padding: 12px 30px;
+            background: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 3px 0 #ddd;
+        }
+    </style>
+</head>
+<body>
+
+<div class="status-bar">輪到你了，請出牌</div>
+
+<div class="mahjong-area">
+    <!-- 上排：電腦牌背 -->
+    <div class="hand" id="cpuHand"></div>
+    <div class="discard-area"></div>
+    <!-- 下排：玩家手牌 -->
+    <div class="hand" id="playerHand"></div>
+</div>
+
+<button class="btn-reset" onclick="game.init()">重新開局</button>
+
+<script>
+const game = (() => {
+    // 固定指向原始圖檔儲存庫：mahjong_graphic
+    const folder = encodeURIComponent("Vectors 矢量图");
+    const svgBase = `https://raw.githubusercontent.com/kuochili-ops/mahjong_graphic/main/${folder}/SVG/`;
+    
+    let deck = [], playerHand = [];
+
+    const shuffle = (array) => {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+    };
+
+    const createDeck = () => {
+        let d = [];
+        ['m', 'p', 's'].forEach(t => { 
+            for(let i=1; i<=9; i++) for(let j=0; j<4; j++) d.push(`${i}${t}`); 
+        });
+        for(let i=1; i<=7; i++) for(let j=0; j<4; j++) d.push(`${i}z`); 
+        return shuffle(d);
+    };
+
+    const sort = (h) => h.sort((a,b) => {
+        const w = {m:0, p:10, s:20, z:30};
+        return (parseInt(a[0]) + w[a[1]]) - (parseInt(b[0]) + w[b[1]]);
+    });
+
+    const init = () => {
+        deck = createDeck();
+        playerHand = sort(deck.splice(0, 16));
+        render(playerHand, deck.pop());
+    };
+
+    const render = (hand, draw) => {
+        const pContainer = document.getElementById('playerHand');
+        const cContainer = document.getElementById('cpuHand');
+        
+        pContainer.innerHTML = '';
+        [...hand, draw].forEach((t, i) => {
+            const div = document.createElement('div');
+            div.className = 'tile' + (i === 16 ? ' draw-gap' : '');
+            // 從原始路徑抓取 SVG 圖檔
+            div.innerHTML = `<img src="${svgBase}${t}.svg">`;
+            pContainer.appendChild(div);
+        });
+
+        cContainer.innerHTML = '';
+        for(let i=0; i<16; i++) {
+            cContainer.innerHTML += `<div class="cpu-tile"></div>`;
+        }
+    };
+
+    return { init };
+})();
+
+window.onload = game.init;
+</script>
+</body>
+</html>
