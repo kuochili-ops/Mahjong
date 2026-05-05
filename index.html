@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>White 6 台灣麻將 - 吃牌功能完整版</title>
+    <title>White 6 台灣麻將 - 手動決策版</title>
     <style>
         :root {
             --bg-table: #2e7d32;
@@ -31,7 +31,7 @@
             background: rgba(0,0,0,0.6);
             padding: 6px 20px;
             border-radius: 20px;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             min-height: 24px;
             display: flex;
             align-items: center;
@@ -66,12 +66,12 @@
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: transform 0.15s;
+            transition: transform 0.1s;
             margin: 0 -0.5px;
         }
 
         .tile img { width: 100%; height: auto; display: block; }
-        .tile.selected { transform: translateY(-12px); }
+        .tile.selected { transform: translateY(-15px); filter: brightness(1.2); }
 
         .cpu-tile {
             width: var(--back-w);
@@ -94,7 +94,7 @@
             overflow-y: auto;
         }
 
-        .discard-tile { width: 22px; height: auto; margin: 0 auto; opacity: 0.9; }
+        .discard-tile { width: 22px; height: auto; margin: 0 auto; }
 
         .action-bar {
             display: flex;
@@ -116,7 +116,7 @@
             box-shadow: 0 2px 0 #999;
         }
 
-        .btn:disabled { opacity: 0.3; pointer-events: none; }
+        .btn:active { background: #ccc; }
         .btn-reset { background: #fff; margin-bottom: 15px; width: 120px; flex: none; }
         
         .draw-gap { margin-left: 8px; }
@@ -124,21 +124,21 @@
 </head>
 <body>
 
-<div class="status-bar" id="status">準備開局...</div>
+<div class="status-bar" id="status">White 6 台灣麻將</div>
 
 <div class="mahjong-area">
     <div class="hand" id="cpuHand"></div>
     <div class="discard-area" id="discardPile"></div>
     
     <div class="action-bar">
-        <button class="btn" id="btn-draw" onclick="game.action('drawOrDiscard')">摸入/捨去</button>
-        <button class="btn" id="btn-chi" onclick="game.action('chi')" disabled>吃牌</button>
-        <button class="btn" id="btn-peng" onclick="game.action('peng')" disabled>碰</button>
-        <button class="btn" id="btn-gang" onclick="game.action('gang')" disabled>槓</button>
-        <button class="btn" id="btn-win" onclick="game.action('win')" disabled>胡</button>
+        <button class="btn" onclick="game.action('drawOrDiscard')">摸入/捨去</button>
+        <button class="btn" onclick="game.action('chi')">吃牌</button>
+        <button class="btn" onclick="game.action('peng')">碰</button>
+        <button class="btn" onclick="game.action('gang')">槓</button>
+        <button class="btn" onclick="game.action('win')">胡</button>
     </div>
 
-    <div class="hand" id="playerHand">
+    <div id="playerHandArea" class="hand">
         <div id="melds" class="melds"></div>
         <div id="handTiles" class="hand" style="min-height:auto;"></div>
     </div>
@@ -150,8 +150,7 @@
 const game = (() => {
     const svgBase = `https://raw.githubusercontent.com/kuochili-ops/mahjong_graphic/main/${encodeURIComponent("Vectors 矢量图")}/SVG/`;
     let deck = [], playerHand = [], playerMelds = [], lastDiscard = null, drawTile = null;
-    let selectedIndex = -1;
-    let possibleChiGroups = [];
+    let selectedIndices = []; // 支援多選
 
     const sortTiles = (h) => h.sort((a,b) => {
         const w = {m:0, p:10, s:20, z:30};
@@ -168,33 +167,13 @@ const game = (() => {
         playerMelds = [];
         drawTile = deck.pop();
         lastDiscard = null;
-        selectedIndex = -1;
+        selectedIndices = [];
         document.getElementById('discardPile').innerHTML = '';
-        updateStatus("遊戲開始，請選一張牌打出");
+        updateStatus("請選一張牌打出");
         render();
     };
 
     const updateStatus = (msg) => document.getElementById('status').innerText = msg;
-
-    const checkActions = (tile) => {
-        if(!tile) return;
-        const count = playerHand.filter(t => t === tile).length;
-        document.getElementById('btn-peng').disabled = count < 2;
-        document.getElementById('btn-gang').disabled = count < 3;
-        
-        // 吃牌邏輯：上家打出的牌與手牌組成順子
-        possibleChiGroups = [];
-        const type = tile[1];
-        if(type !== 'z') {
-            const val = parseInt(tile[0]);
-            const has = (v) => playerHand.includes(v + type);
-            // 三種吃法：[val-2, val-1, val], [val-1, val, val+1], [val, val+1, val+2]
-            if(val >= 3 && has(val-2) && has(val-1)) possibleChiGroups.push([ (val-2)+type, (val-1)+type, tile ]);
-            if(val >= 2 && val <= 8 && has(val-1) && has(val+1)) possibleChiGroups.push([ (val-1)+type, tile, (val+1)+type ]);
-            if(val <= 7 && has(val+1) && has(val+2)) possibleChiGroups.push([ tile, (val+1)+type, (val+2)+type ]);
-        }
-        document.getElementById('btn-chi').disabled = possibleChiGroups.length === 0;
-    };
 
     const render = () => {
         const hContainer = document.getElementById('handTiles');
@@ -212,9 +191,14 @@ const game = (() => {
         currentFullHand.forEach((t, i) => {
             const div = document.createElement('div');
             const isDraw = drawTile && (i === currentFullHand.length - 1);
-            div.className = `tile ${isDraw ? 'draw-gap' : ''} ${selectedIndex === i ? 'selected' : ''}`;
+            div.className = `tile ${isDraw ? 'draw-gap' : ''} ${selectedIndices.includes(i) ? 'selected' : ''}`;
             div.innerHTML = `<img src="${svgBase}${t}.svg">`;
-            div.onclick = () => { selectedIndex = (selectedIndex === i) ? -1 : i; render(); };
+            div.onclick = () => { 
+                const idx = selectedIndices.indexOf(i);
+                if (idx > -1) selectedIndices.splice(idx, 1);
+                else selectedIndices.push(i);
+                render(); 
+            };
             hContainer.appendChild(div);
         });
 
@@ -225,54 +209,62 @@ const game = (() => {
         setTimeout(() => {
             lastDiscard = deck.pop(); 
             document.getElementById('discardPile').innerHTML += `<img class="discard-tile" src="${svgBase}${lastDiscard}.svg">`;
-            updateStatus(`對方打出 ${lastDiscard}，請操作`);
-            checkActions(lastDiscard);
+            updateStatus(`對方打出 ${lastDiscard}，請決定是否吃/碰或摸牌`);
             render();
         }, 800);
     };
 
     const action = (type) => {
+        let all = [...playerHand];
+        if(drawTile) all.push(drawTile);
+
         if (type === 'drawOrDiscard') {
-            if (selectedIndex === -1) {
+            if (selectedIndices.length !== 1) {
                 if (!drawTile) {
                     drawTile = deck.pop();
-                    updateStatus("已摸牌，請選一張捨去");
+                    updateStatus("已摸牌，請選一張捨棄");
+                    selectedIndices = [];
                     render();
-                } else { updateStatus("請先選一張牌打出"); }
+                } else { updateStatus("請先選出一張牌打出"); }
                 return;
             }
-            let all = [...playerHand];
-            if(drawTile) all.push(drawTile);
-            let disc = all.splice(selectedIndex, 1)[0];
+            let disc = all.splice(selectedIndices[0], 1)[0];
             document.getElementById('discardPile').innerHTML += `<img class="discard-tile" src="${svgBase}${disc}.svg">`;
             playerHand = sortTiles(all);
             drawTile = null;
-            selectedIndex = -1;
+            selectedIndices = [];
             updateStatus("等待對方出牌...");
-            document.getElementById('btn-chi').disabled = true;
-            document.getElementById('btn-peng').disabled = true;
             render();
             cpuPlay();
-        } else if (type === 'chi') {
-            // 執行吃牌：預設取第一組符合的吃法
-            const group = possibleChiGroups[0];
-            playerMelds.push(group);
-            group.forEach(t => {
-                if(t !== lastDiscard) playerHand.splice(playerHand.indexOf(t), 1);
-            });
-            drawTile = null; 
-            selectedIndex = -1;
-            document.getElementById('btn-chi').disabled = true;
-            updateStatus("吃！請選一張牌打出");
-            render();
-        } else if (type === 'peng') {
-            playerMelds.push([lastDiscard, lastDiscard, lastDiscard]);
-            for(let i=0; i<2; i++) playerHand.splice(playerHand.indexOf(lastDiscard), 1);
-            drawTile = null;
-            selectedIndex = -1;
-            document.getElementById('btn-peng').disabled = true;
-            updateStatus("碰！請選一張牌打出");
-            render();
+        } else if (type === 'chi' || type === 'peng') {
+            if (selectedIndices.length !== 2) {
+                updateStatus("請先點選兩張手牌再執行" + (type === 'chi' ? '吃牌' : '碰牌'));
+                return;
+            }
+            
+            const selectedTiles = selectedIndices.map(i => all[i]);
+            const combined = [...selectedTiles, lastDiscard];
+            
+            let isValid = false;
+            if (type === 'peng') {
+                isValid = selectedTiles.every(t => t === lastDiscard);
+            } else {
+                const vals = combined.filter(t => t[1] === lastDiscard[1]).map(t => parseInt(t[0])).sort();
+                isValid = vals.length === 3 && (vals[2]-vals[1] === 1) && (vals[1]-vals[0] === 1);
+            }
+
+            if (isValid) {
+                playerMelds.push(sortTiles(combined));
+                // 由大到小移除，避免 index 跑掉
+                selectedIndices.sort((a,b) => b-a).forEach(i => all.splice(i, 1));
+                playerHand = sortTiles(all);
+                drawTile = null;
+                selectedIndices = [];
+                updateStatus("成立！請選一張牌打出");
+                render();
+            } else {
+                updateStatus("組合不符合規則，請重新選擇");
+            }
         }
     };
 
