@@ -3,11 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>White 6 台灣麻將 - 跨儲存庫對齊版</title>
+    <title>White 6 台灣麻將 - 交互模擬版</title>
     <style>
         :root {
             --bg-table: #2e7d32;
-            /* 經過精確計算，抵消 SVG 留白後的實體牌面寬度 */
             --back-w: 23px; 
             --back-h: 33px;
             --blue-back: #1565c0;
@@ -27,11 +26,11 @@
         }
 
         .status-bar {
-            margin-top: 30px;
+            margin-top: 15px;
             background: rgba(0,0,0,0.5);
-            padding: 10px 40px;
+            padding: 8px 30px;
             border-radius: 30px;
-            font-size: 1.1rem;
+            font-size: 1rem;
         }
 
         .mahjong-area {
@@ -41,7 +40,7 @@
             justify-content: space-between;
             width: 100%;
             max-width: 500px;
-            padding: 50px 10px;
+            padding: 20px 10px;
             box-sizing: border-box;
         }
 
@@ -49,32 +48,29 @@
             display: flex;
             justify-content: center;
             gap: var(--tile-gap);
-            min-height: 50px;
-            align-items: center;
+            min-height: 60px;
+            align-items: flex-end;
         }
 
-        /* 玩家正面：使用負邊距抵消透明邊框，使白色牌身對齊上方藍色背面 */
+        /* 手牌區分開：吃碰槓的牌組 / 一般手牌 */
+        .melds { display: flex; gap: 8px; margin-right: 12px; }
+        .meld-group { display: flex; gap: 1px; }
+
         .tile {
-            width: 28px; /* 圖片容器尺寸 */
+            width: 28px;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
             transition: transform 0.2s;
-            margin: 0 -1.5px; /* 關鍵：縮小圖片間的透明縫隙 */
+            margin: 0 -1.5px;
         }
 
-        .tile img {
-            width: 100%;
-            height: auto;
-            display: block;
-        }
+        .tile img { width: 100%; height: auto; display: block; }
 
-        .tile:hover {
-            transform: translateY(-10px);
-        }
+        /* 點選牌彈起效果 */
+        .tile.selected { transform: translateY(-15px); }
 
-        /* 電腦牌背：與正面白色部分實體對齊 */
         .cpu-tile {
             width: var(--back-w);
             height: var(--back-h);
@@ -83,107 +79,156 @@
             border-radius: 2px;
             box-shadow: 0 2px 3px rgba(0,0,0,0.4);
             box-sizing: border-box;
-            position: relative;
-        }
-
-        .cpu-tile::after {
-            content: '';
-            position: absolute;
-            top: 2px; left: 2px; right: 2px; bottom: 2px;
-            border: 1px solid rgba(255,255,255,0.15);
-            border-radius: 1px;
         }
 
         .discard-area {
             background: rgba(0,0,0,0.08);
             border-radius: 15px;
-            min-height: 180px;
+            min-height: 140px;
+            display: flex;
+            flex-wrap: wrap;
+            align-content: flex-start;
+            gap: 2px;
+            padding: 10px;
         }
 
-        .draw-gap { margin-left: 12px; }
+        .discard-tile { width: 22px; height: auto; }
 
-        .btn-reset {
-            margin-bottom: 40px;
-            padding: 12px 30px;
-            background: white;
+        /* 五鍵操作區 */
+        .action-bar {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 15px;
+        }
+
+        .btn {
+            padding: 10px 12px;
+            background: #f0f0f0;
             border: none;
-            border-radius: 8px;
+            border-radius: 5px;
             font-weight: bold;
             cursor: pointer;
-            box-shadow: 0 3px 0 #ddd;
+            color: #333;
+            box-shadow: 0 3px 0 #bbb;
         }
+
+        .btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #bbb; }
+        .btn-reset { background: #fff; margin-bottom: 20px; }
+        
+        .draw-gap { margin-left: 12px; }
     </style>
 </head>
 <body>
 
-<div class="status-bar">輪到你了，請出牌</div>
+<div class="status-bar" id="status">遊戲開始，請進行操作</div>
 
 <div class="mahjong-area">
-    <!-- 上排：電腦牌背 -->
     <div class="hand" id="cpuHand"></div>
-    <div class="discard-area"></div>
-    <!-- 下排：玩家手牌 -->
-    <div class="hand" id="playerHand"></div>
+    <div class="discard-area" id="discardPile"></div>
+    
+    <div class="action-bar">
+        <button class="btn" onclick="game.action('drawOrDiscard')">摸入/捨去</button>
+        <button class="btn" onclick="game.action('chi')">吃牌</button>
+        <button class="btn" onclick="game.action('peng')">碰</button>
+        <button class="btn" onclick="game.action('gang')">槓</button>
+        <button class="btn" onclick="game.action('win')">胡</button>
+    </div>
+
+    <div class="hand" id="playerHand">
+        <div id="melds" class="melds"></div>
+        <div id="handTiles" class="hand" style="min-height:auto;"></div>
+    </div>
 </div>
 
-<button class="btn-reset" onclick="game.init()">重新開局</button>
+<button class="btn btn-reset" onclick="game.init()">重新開局</button>
 
 <script>
 const game = (() => {
-    // 固定指向原始圖檔儲存庫：mahjong_graphic
-    const folder = encodeURIComponent("Vectors 矢量图");
-    const svgBase = `https://raw.githubusercontent.com/kuochili-ops/mahjong_graphic/main/${folder}/SVG/`;
-    
-    let deck = [], playerHand = [];
+    const svgBase = `https://raw.githubusercontent.com/kuochili-ops/mahjong_graphic/main/${encodeURIComponent("Vectors 矢量图")}/SVG/`;
+    let deck = [], hand = [], drawTile = null, melds = [], selectedIndex = -1;
 
-    const shuffle = (array) => {
-        for (let i = array.length - 1; i > 0; i--) {
+    const shuffle = (arr) => {
+        for (let i = arr.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
-            [array[i], array[j]] = [array[j], array[i]];
+            [arr[i], arr[j]] = [arr[j], arr[i]];
         }
-        return array;
+        return arr;
     };
 
-    const createDeck = () => {
-        let d = [];
-        ['m', 'p', 's'].forEach(t => { 
-            for(let i=1; i<=9; i++) for(let j=0; j<4; j++) d.push(`${i}${t}`); 
-        });
-        for(let i=1; i<=7; i++) for(let j=0; j<4; j++) d.push(`${i}z`); 
-        return shuffle(d);
-    };
-
-    const sort = (h) => h.sort((a,b) => {
+    const sortTiles = (h) => h.sort((a,b) => {
         const w = {m:0, p:10, s:20, z:30};
         return (parseInt(a[0]) + w[a[1]]) - (parseInt(b[0]) + w[b[1]]);
     });
 
     const init = () => {
-        deck = createDeck();
-        playerHand = sort(deck.splice(0, 16));
-        render(playerHand, deck.pop());
+        deck = [];
+        ['m', 'p', 's'].forEach(t => { for(let i=1; i<=9; i++) for(let j=0; j<4; j++) deck.push(`${i}${t}`); });
+        for(let i=1; i<=7; i++) for(let j=0; j<4; j++) deck.push(`${i}z`); 
+        shuffle(deck);
+        
+        melds = [];
+        hand = sortTiles(deck.splice(0, 16));
+        drawTile = deck.pop();
+        selectedIndex = -1;
+        document.getElementById('discardPile').innerHTML = '';
+        render();
     };
 
-    const render = (hand, draw) => {
-        const pContainer = document.getElementById('playerHand');
+    const render = () => {
+        const hContainer = document.getElementById('handTiles');
+        const mContainer = document.getElementById('melds');
         const cContainer = document.getElementById('cpuHand');
-        
-        pContainer.innerHTML = '';
-        [...hand, draw].forEach((t, i) => {
+
+        // 渲染吃碰槓牌組
+        mContainer.innerHTML = melds.map(m => `
+            <div class="meld-group">
+                ${m.map(t => `<div class="tile"><img src="${svgBase}${t}.svg"></div>`).join('')}
+            </div>
+        `).join('');
+
+        // 渲染手牌
+        hContainer.innerHTML = '';
+        [...hand, drawTile].forEach((t, i) => {
+            if(!t) return;
             const div = document.createElement('div');
-            div.className = 'tile' + (i === 16 ? ' draw-gap' : '');
-            // 從原始路徑抓取 SVG 圖檔
+            div.className = `tile ${i === hand.length ? 'draw-gap' : ''} ${selectedIndex === i ? 'selected' : ''}`;
             div.innerHTML = `<img src="${svgBase}${t}.svg">`;
-            pContainer.appendChild(div);
+            div.onclick = () => { selectedIndex = (selectedIndex === i) ? -1 : i; render(); };
+            hContainer.appendChild(div);
         });
 
-        cContainer.innerHTML = '';
-        for(let i=0; i<16; i++) {
-            cContainer.innerHTML += `<div class="cpu-tile"></div>`;
-        }
+        // 渲染電腦背面
+        cContainer.innerHTML = Array(16).fill('<div class="cpu-tile"></div>').join('');
     };
 
-    return { init };
+    const action = (type) => {
+        const status = document.getElementById('status');
+        if (type === 'drawOrDiscard') {
+            if (selectedIndex === -1) {
+                status.innerText = "請先點選一張牌再按下捨去";
+                return;
+            }
+            // 捨牌邏輯
+            let all = [...hand, drawTile];
+            let discarded = all.splice(selectedIndex, 1)[0];
+            const dp = document.getElementById('discardPile');
+            dp.innerHTML += `<img class="discard-tile" src="${svgBase}${discarded}.svg">`;
+            
+            // 摸新牌
+            hand = sortTiles(all);
+            drawTile = deck.pop();
+            selectedIndex = -1;
+            status.innerText = "已出牌，摸入新牌";
+        } else if (['chi', 'peng', 'gang'].includes(type)) {
+            status.innerText = "模擬對戰：請點選要湊組的牌後操作 (功能開發中)";
+            // 此處可擴充吃碰邏輯，將選中牌加入 melds 並從 hand 移除
+        } else if (type === 'win') {
+            status.innerText = "恭喜胡牌！";
+        }
+        render();
+    };
+
+    return { init, action, render };
 })();
 
 window.onload = game.init;
