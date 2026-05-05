@@ -2,15 +2,15 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>White 6 台灣麻將 - 交互模擬版</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>White 6 台灣麻將 - 智慧對戰版</title>
     <style>
         :root {
             --bg-table: #2e7d32;
-            --back-w: 23px; 
-            --back-h: 33px;
+            --back-w: 20px; /* 縮小寬度防止截斷 */
+            --back-h: 28px;
             --blue-back: #1565c0;
-            --tile-gap: 2px;
+            --tile-gap: 1px;
         }
 
         body {
@@ -23,14 +23,18 @@
             font-family: sans-serif;
             color: white;
             overflow: hidden;
+            touch-action: manipulation;
         }
 
         .status-bar {
-            margin-top: 15px;
-            background: rgba(0,0,0,0.5);
-            padding: 8px 30px;
-            border-radius: 30px;
-            font-size: 1rem;
+            margin-top: 10px;
+            background: rgba(0,0,0,0.6);
+            padding: 6px 20px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            height: 20px;
+            display: flex;
+            align-items: center;
         }
 
         .mahjong-area {
@@ -39,8 +43,8 @@
             flex-direction: column;
             justify-content: space-between;
             width: 100%;
-            max-width: 500px;
-            padding: 20px 10px;
+            max-width: 380px; /* 限制最大寬度以符合手機 */
+            padding: 10px 5px;
             box-sizing: border-box;
         }
 
@@ -48,28 +52,25 @@
             display: flex;
             justify-content: center;
             gap: var(--tile-gap);
-            min-height: 60px;
+            min-height: 55px;
             align-items: flex-end;
         }
 
-        /* 手牌區分開：吃碰槓的牌組 / 一般手牌 */
-        .melds { display: flex; gap: 8px; margin-right: 12px; }
-        .meld-group { display: flex; gap: 1px; }
+        .melds { display: flex; gap: 4px; margin-right: 5px; }
+        .meld-group { display: flex; gap: 0px; border: 1px solid rgba(255,255,255,0.2); }
 
         .tile {
-            width: 28px;
+            width: 21px; /* 縮小寬度 */
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: transform 0.2s;
-            margin: 0 -1.5px;
+            transition: transform 0.15s;
+            margin: 0 -0.5px;
         }
 
         .tile img { width: 100%; height: auto; display: block; }
-
-        /* 點選牌彈起效果 */
-        .tile.selected { transform: translateY(-15px); }
+        .tile.selected { transform: translateY(-12px); }
 
         .cpu-tile {
             width: var(--back-w);
@@ -77,61 +78,64 @@
             background-color: var(--blue-back);
             border: 1px solid rgba(255, 255, 255, 0.8);
             border-radius: 2px;
-            box-shadow: 0 2px 3px rgba(0,0,0,0.4);
-            box-sizing: border-box;
         }
 
         .discard-area {
             background: rgba(0,0,0,0.08);
-            border-radius: 15px;
-            min-height: 140px;
-            display: flex;
-            flex-wrap: wrap;
-            align-content: flex-start;
+            border-radius: 10px;
+            flex: 1;
+            margin: 10px 0;
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            grid-auto-rows: 32px;
             gap: 2px;
-            padding: 10px;
+            padding: 8px;
+            overflow-y: auto;
         }
 
-        .discard-tile { width: 22px; height: auto; }
+        .discard-tile { width: 22px; height: auto; margin: 0 auto; }
 
-        /* 五鍵操作區 */
         .action-bar {
             display: flex;
-            gap: 5px;
-            margin-bottom: 15px;
+            justify-content: center;
+            gap: 4px;
+            margin-bottom: 10px;
         }
 
         .btn {
-            padding: 10px 12px;
-            background: #f0f0f0;
+            padding: 8px 6px;
+            background: linear-gradient(to bottom, #fff, #e0e0e0);
             border: none;
-            border-radius: 5px;
+            border-radius: 4px;
             font-weight: bold;
+            font-size: 0.8rem;
             cursor: pointer;
             color: #333;
-            box-shadow: 0 3px 0 #bbb;
+            flex: 1;
+            max-width: 70px;
+            box-shadow: 0 2px 0 #999;
         }
 
-        .btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #bbb; }
-        .btn-reset { background: #fff; margin-bottom: 20px; }
+        .btn:disabled { opacity: 0.5; filter: grayscale(1); }
+        .btn-reset { background: #fff; margin-bottom: 15px; flex: none; width: 120px; }
         
-        .draw-gap { margin-left: 12px; }
+        .draw-gap { margin-left: 8px; }
     </style>
 </head>
 <body>
 
-<div class="status-bar" id="status">遊戲開始，請進行操作</div>
+<div class="status-bar" id="status">White 6 台灣麻將</div>
 
 <div class="mahjong-area">
     <div class="hand" id="cpuHand"></div>
     <div class="discard-area" id="discardPile"></div>
     
     <div class="action-bar">
-        <button class="btn" onclick="game.action('drawOrDiscard')">摸入/捨去</button>
-        <button class="btn" onclick="game.action('chi')">吃牌</button>
-        <button class="btn" onclick="game.action('peng')">碰</button>
-        <button class="btn" onclick="game.action('gang')">槓</button>
-        <button class="btn" onclick="game.action('win')">胡</button>
+        <button class="btn" id="btn-draw" onclick="game.action('drawOrDiscard')">摸入/捨去</button>
+        <button class="btn" id="btn-chi" onclick="game.action('chi')" disabled>吃牌</button>
+        <button class="btn" id="btn-peng" onclick="game.action('peng')" disabled>碰</button>
+        <button class="btn" id="btn-gang" onclick="game.action('gang')" disabled>槓</button>
+        <button class="btn" id="btn-win" onclick="game.action('win')" disabled>胡</button>
     </div>
 
     <div class="hand" id="playerHand">
@@ -145,15 +149,8 @@
 <script>
 const game = (() => {
     const svgBase = `https://raw.githubusercontent.com/kuochili-ops/mahjong_graphic/main/${encodeURIComponent("Vectors 矢量图")}/SVG/`;
-    let deck = [], hand = [], drawTile = null, melds = [], selectedIndex = -1;
-
-    const shuffle = (arr) => {
-        for (let i = arr.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [arr[i], arr[j]] = [arr[j], arr[i]];
-        }
-        return arr;
-    };
+    let deck = [], playerHand = [], cpuHand = [], playerMelds = [], lastDiscard = null, drawTile = null;
+    let selectedIndex = -1;
 
     const sortTiles = (h) => h.sort((a,b) => {
         const w = {m:0, p:10, s:20, z:30};
@@ -164,14 +161,37 @@ const game = (() => {
         deck = [];
         ['m', 'p', 's'].forEach(t => { for(let i=1; i<=9; i++) for(let j=0; j<4; j++) deck.push(`${i}${t}`); });
         for(let i=1; i<=7; i++) for(let j=0; j<4; j++) deck.push(`${i}z`); 
-        shuffle(deck);
+        for(let i=deck.length-1; i>0; i--){ const j=Math.floor(Math.random()*(i+1)); [deck[i],deck[j]]=[deck[j],deck[i]]; }
         
-        melds = [];
-        hand = sortTiles(deck.splice(0, 16));
+        playerHand = sortTiles(deck.splice(0, 16));
+        cpuHand = deck.splice(0, 16);
+        playerMelds = [];
         drawTile = deck.pop();
+        lastDiscard = null;
         selectedIndex = -1;
         document.getElementById('discardPile').innerHTML = '';
+        updateStatus("請選擇一張牌打出");
         render();
+    };
+
+    const updateStatus = (msg) => document.getElementById('status').innerText = msg;
+
+    const checkActions = (tile) => {
+        if(!tile) return;
+        const count = playerHand.filter(t => t === tile).length;
+        document.getElementById('btn-peng').disabled = count < 2;
+        document.getElementById('btn-gang').disabled = count < 3;
+        // 簡易胡牌判斷預留
+        document.getElementById('btn-win').disabled = true; 
+        
+        // 吃牌判斷 (簡化版)
+        const type = tile[1];
+        if(type !== 'z') {
+            const val = parseInt(tile[0]);
+            const has = (v) => playerHand.includes(v + type);
+            const canChi = (has(val-1) && has(val+1)) || (has(val-2) && has(val-1)) || (has(val+1) && has(val+2));
+            document.getElementById('btn-chi').disabled = !canChi;
+        }
     };
 
     const render = () => {
@@ -179,56 +199,60 @@ const game = (() => {
         const mContainer = document.getElementById('melds');
         const cContainer = document.getElementById('cpuHand');
 
-        // 渲染吃碰槓牌組
-        mContainer.innerHTML = melds.map(m => `
-            <div class="meld-group">
-                ${m.map(t => `<div class="tile"><img src="${svgBase}${t}.svg"></div>`).join('')}
-            </div>
+        mContainer.innerHTML = playerMelds.map(m => `
+            <div class="meld-group">${m.map(t => `<div class="tile"><img src="${svgBase}${t}.svg"></div>`).join('')}</div>
         `).join('');
 
-        // 渲染手牌
         hContainer.innerHTML = '';
-        [...hand, drawTile].forEach((t, i) => {
+        [...playerHand, drawTile].forEach((t, i) => {
             if(!t) return;
             const div = document.createElement('div');
-            div.className = `tile ${i === hand.length ? 'draw-gap' : ''} ${selectedIndex === i ? 'selected' : ''}`;
+            div.className = `tile ${i === playerHand.length ? 'draw-gap' : ''} ${selectedIndex === i ? 'selected' : ''}`;
             div.innerHTML = `<img src="${svgBase}${t}.svg">`;
             div.onclick = () => { selectedIndex = (selectedIndex === i) ? -1 : i; render(); };
             hContainer.appendChild(div);
         });
 
-        // 渲染電腦背面
-        cContainer.innerHTML = Array(16).fill('<div class="cpu-tile"></div>').join('');
+        cContainer.innerHTML = Array(cpuHand.length).fill('<div class="cpu-tile"></div>').join('');
+    };
+
+    const cpuPlay = () => {
+        setTimeout(() => {
+            const cpuDraw = deck.pop();
+            cpuHand.push(cpuDraw);
+            const discardIdx = Math.floor(Math.random() * cpuHand.length);
+            lastDiscard = cpuHand.splice(discardIdx, 1)[0];
+            
+            const dp = document.getElementById('discardPile');
+            dp.innerHTML += `<img class="discard-tile" src="${svgBase}${lastDiscard}.svg">`;
+            updateStatus(`對方打出了 ${lastDiscard}，輪到你操作`);
+            checkActions(lastDiscard);
+            render();
+        }, 800);
     };
 
     const action = (type) => {
-        const status = document.getElementById('status');
         if (type === 'drawOrDiscard') {
-            if (selectedIndex === -1) {
-                status.innerText = "請先點選一張牌再按下捨去";
-                return;
-            }
-            // 捨牌邏輯
-            let all = [...hand, drawTile];
-            let discarded = all.splice(selectedIndex, 1)[0];
-            const dp = document.getElementById('discardPile');
-            dp.innerHTML += `<img class="discard-tile" src="${svgBase}${discarded}.svg">`;
-            
-            // 摸新牌
-            hand = sortTiles(all);
-            drawTile = deck.pop();
+            if (selectedIndex === -1) { updateStatus("請先點選一張牌再出牌"); return; }
+            let all = [...playerHand, drawTile];
+            let disc = all.splice(selectedIndex, 1)[0];
+            document.getElementById('discardPile').innerHTML += `<img class="discard-tile" src="${svgBase}${disc}.svg">`;
+            playerHand = sortTiles(all);
+            drawTile = null;
             selectedIndex = -1;
-            status.innerText = "已出牌，摸入新牌";
-        } else if (['chi', 'peng', 'gang'].includes(type)) {
-            status.innerText = "模擬對戰：請點選要湊組的牌後操作 (功能開發中)";
-            // 此處可擴充吃碰邏輯，將選中牌加入 melds 並從 hand 移除
-        } else if (type === 'win') {
-            status.innerText = "恭喜胡牌！";
+            render();
+            cpuPlay();
+        } else if (type === 'peng') {
+            playerMelds.push([lastDiscard, lastDiscard, lastDiscard]);
+            for(let i=0; i<2; i++) playerHand.splice(playerHand.indexOf(lastDiscard), 1);
+            drawTile = null; // 碰牌後不摸牌，直接進入出牌階段
+            updateStatus("碰！請選擇一張牌捨棄");
+            render();
         }
-        render();
+        // 吃牌與槓牌邏輯可依此類推實作
     };
 
-    return { init, action, render };
+    return { init, action };
 })();
 
 window.onload = game.init;
