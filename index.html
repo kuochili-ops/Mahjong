@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>White 6 台灣麻將 - 手動決策版</title>
+    <title>𓃥 白六台灣麻將</title>
     <style>
         :root {
             --bg-table: #2e7d32;
@@ -20,7 +20,7 @@
             flex-direction: column;
             align-items: center;
             height: 100vh;
-            font-family: sans-serif;
+            font-family: "PingFang TC", "Microsoft JhengHei", sans-serif;
             color: white;
             overflow: hidden;
             touch-action: manipulation;
@@ -28,14 +28,13 @@
 
         .status-bar {
             margin-top: 10px;
-            background: rgba(0,0,0,0.6);
-            padding: 6px 20px;
+            background: rgba(0,0,0,0.7);
+            padding: 8px 15px;
             border-radius: 20px;
             font-size: 0.85rem;
-            min-height: 24px;
-            display: flex;
-            align-items: center;
+            min-height: 20px;
             text-align: center;
+            border: 1px solid #ffd700;
         }
 
         .mahjong-area {
@@ -45,7 +44,7 @@
             justify-content: space-between;
             width: 100%;
             max-width: 380px;
-            padding: 10px 5px;
+            padding: 5px;
             box-sizing: border-box;
         }
 
@@ -53,42 +52,38 @@
             display: flex;
             justify-content: center;
             gap: var(--tile-gap);
-            min-height: 55px;
+            min-height: 50px;
             align-items: flex-end;
+            margin-bottom: 5px;
         }
 
-        .melds { display: flex; gap: 4px; margin-right: 5px; }
-        .meld-group { display: flex; gap: 0px; border: 1px solid rgba(255,255,255,0.3); padding: 1px; border-radius: 2px; }
+        .melds { display: flex; gap: 4px; }
+        .meld-group { display: flex; gap: 0px; border: 1px solid rgba(255,255,255,0.4); border-radius: 2px; background: rgba(255,255,255,0.1); }
 
         .tile {
             width: 21px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
             cursor: pointer;
             transition: transform 0.1s;
-            margin: 0 -0.5px;
         }
-
         .tile img { width: 100%; height: auto; display: block; }
-        .tile.selected { transform: translateY(-15px); filter: brightness(1.2); }
+        .tile.selected { transform: translateY(-15px); filter: brightness(1.2) drop-shadow(0 0 5px #fff); }
 
         .cpu-tile {
             width: var(--back-w);
             height: var(--back-h);
             background-color: var(--blue-back);
-            border: 1px solid rgba(255, 255, 255, 0.8);
+            border: 1px solid #999;
             border-radius: 2px;
         }
 
         .discard-area {
-            background: rgba(0,0,0,0.08);
-            border-radius: 10px;
+            background: rgba(0,0,0,0.15);
+            border-radius: 8px;
             flex: 1;
             margin: 10px 0;
             display: grid;
             grid-template-columns: repeat(9, 1fr);
-            grid-auto-rows: 32px;
+            grid-auto-rows: 30px;
             gap: 2px;
             padding: 8px;
             overflow-y: auto;
@@ -100,36 +95,49 @@
             display: flex;
             justify-content: center;
             gap: 4px;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
         }
 
         .btn {
-            padding: 8px 4px;
-            background: linear-gradient(to bottom, #fff, #e0e0e0);
+            padding: 10px 2px;
+            background: linear-gradient(to bottom, #fff, #d0d0d0);
             border: none;
             border-radius: 4px;
             font-weight: bold;
-            font-size: 0.8rem;
+            font-size: 0.85rem;
             cursor: pointer;
-            color: #333;
+            color: #1a1a1a;
             flex: 1;
-            box-shadow: 0 2px 0 #999;
+            box-shadow: 0 3px 0 #666;
         }
 
-        .btn:active { background: #ccc; }
-        .btn-reset { background: #fff; margin-bottom: 15px; width: 120px; flex: none; }
+        .btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #666; }
         
-        .draw-gap { margin-left: 8px; }
+        .draw-gap { margin-left: 10px; }
+
+        .money-tag {
+            font-size: 0.7rem;
+            color: #ffd700;
+            margin-bottom: 5px;
+        }
     </style>
 </head>
 <body>
 
-<div class="status-bar" id="status">White 6 台灣麻將</div>
+<div class="status-bar" id="status">𓃥 白六台灣麻將</div>
+<div class="money-tag">籌碼：白六金圓 (底 100000 / 每台 20000)</div>
 
 <div class="mahjong-area">
-    <div class="hand" id="cpuHand"></div>
+    <!-- 對手區 -->
+    <div id="cpuArea" class="hand">
+        <div id="cpuMelds" class="melds"></div>
+        <div id="cpuTiles" style="display:flex; gap:1px;"></div>
+    </div>
+
+    <!-- 海底區 -->
     <div class="discard-area" id="discardPile"></div>
     
+    <!-- 操作按鈕 -->
     <div class="action-bar">
         <button class="btn" onclick="game.action('drawOrDiscard')">摸入/捨去</button>
         <button class="btn" onclick="game.action('chi')">吃牌</button>
@@ -138,19 +146,21 @@
         <button class="btn" onclick="game.action('win')">胡</button>
     </div>
 
-    <div id="playerHandArea" class="hand">
-        <div id="melds" class="melds"></div>
-        <div id="handTiles" class="hand" style="min-height:auto;"></div>
+    <!-- 玩家區 -->
+    <div class="hand" id="playerArea">
+        <div id="playerMelds" class="melds"></div>
+        <div id="playerTiles" class="hand" style="min-height:auto;"></div>
     </div>
 </div>
 
-<button class="btn btn-reset" onclick="game.init()">重新開局</button>
+<button class="btn" style="width:120px; margin-bottom:15px;" onclick="game.init()">重新開局</button>
 
 <script>
 const game = (() => {
     const svgBase = `https://raw.githubusercontent.com/kuochili-ops/mahjong_graphic/main/${encodeURIComponent("Vectors 矢量图")}/SVG/`;
-    let deck = [], playerHand = [], playerMelds = [], lastDiscard = null, drawTile = null;
-    let selectedIndices = []; // 支援多選
+    let deck = [], playerHand = [], playerMelds = [], cpuHandCount = 16;
+    let cpuMelds = [], lastDiscard = null, playerDraw = null, cpuDraw = null;
+    let selectedIndices = [];
 
     const sortTiles = (h) => h.sort((a,b) => {
         const w = {m:0, p:10, s:20, z:30};
@@ -165,106 +175,128 @@ const game = (() => {
         
         playerHand = sortTiles(deck.splice(0, 16));
         playerMelds = [];
-        drawTile = deck.pop();
+        cpuMelds = [];
+        cpuHandCount = 16;
+        playerDraw = deck.pop();
+        cpuDraw = null;
         lastDiscard = null;
         selectedIndices = [];
         document.getElementById('discardPile').innerHTML = '';
-        updateStatus("請選一張牌打出");
+        updateStatus("𓃥 白六金圓 準備就緒。請出牌。");
         render();
     };
 
     const updateStatus = (msg) => document.getElementById('status').innerText = msg;
 
     const render = () => {
-        const hContainer = document.getElementById('handTiles');
-        const mContainer = document.getElementById('melds');
-        const cContainer = document.getElementById('cpuHand');
-
-        mContainer.innerHTML = playerMelds.map(m => `
+        // 渲染玩家
+        const pTiles = document.getElementById('playerTiles');
+        const pMelds = document.getElementById('playerMelds');
+        pMelds.innerHTML = playerMelds.map(m => `
             <div class="meld-group">${m.map(t => `<div class="tile"><img src="${svgBase}${t}.svg"></div>`).join('')}</div>
         `).join('');
-
-        hContainer.innerHTML = '';
-        let currentFullHand = [...playerHand];
-        if(drawTile) currentFullHand.push(drawTile);
-
-        currentFullHand.forEach((t, i) => {
+        
+        pTiles.innerHTML = '';
+        let all = [...playerHand];
+        if(playerDraw) all.push(playerDraw);
+        all.forEach((t, i) => {
             const div = document.createElement('div');
-            const isDraw = drawTile && (i === currentFullHand.length - 1);
+            const isDraw = playerDraw && (i === all.length - 1);
             div.className = `tile ${isDraw ? 'draw-gap' : ''} ${selectedIndices.includes(i) ? 'selected' : ''}`;
             div.innerHTML = `<img src="${svgBase}${t}.svg">`;
-            div.onclick = () => { 
+            div.onclick = () => {
                 const idx = selectedIndices.indexOf(i);
                 if (idx > -1) selectedIndices.splice(idx, 1);
                 else selectedIndices.push(i);
-                render(); 
+                render();
             };
-            hContainer.appendChild(div);
+            pTiles.appendChild(div);
         });
 
-        cContainer.innerHTML = Array(16).fill('<div class="cpu-tile"></div>').join('');
+        // 渲染對手
+        const cTiles = document.getElementById('cpuTiles');
+        const cMelds = document.getElementById('cpuMelds');
+        cMelds.innerHTML = cpuMelds.map(m => `
+            <div class="meld-group">${m.map(t => `<div class="tile"><img src="${svgBase}${t}.svg"></div>`).join('')}</div>
+        `).join('');
+        cTiles.innerHTML = Array(cpuHandCount).fill('<div class="cpu-tile"></div>').join('');
+        if(cpuDraw) cTiles.innerHTML += '<div class="cpu-tile draw-gap"></div>';
     };
 
     const cpuPlay = () => {
         setTimeout(() => {
-            lastDiscard = deck.pop(); 
-            document.getElementById('discardPile').innerHTML += `<img class="discard-tile" src="${svgBase}${lastDiscard}.svg">`;
-            updateStatus(`對方打出 ${lastDiscard}，請決定是否吃/碰或摸牌`);
-            render();
+            cpuDraw = true; render();
+            setTimeout(() => {
+                cpuDraw = false;
+                lastDiscard = deck.pop();
+                document.getElementById('discardPile').innerHTML += `<img class="discard-tile" src="${svgBase}${lastDiscard}.svg">`;
+                updateStatus(`對方打出 ${lastDiscard}，請決策。`);
+                render();
+            }, 600);
         }, 800);
     };
 
     const action = (type) => {
         let all = [...playerHand];
-        if(drawTile) all.push(drawTile);
+        if(playerDraw) all.push(playerDraw);
 
         if (type === 'drawOrDiscard') {
             if (selectedIndices.length !== 1) {
-                if (!drawTile) {
-                    drawTile = deck.pop();
-                    updateStatus("已摸牌，請選一張捨棄");
-                    selectedIndices = [];
-                    render();
-                } else { updateStatus("請先選出一張牌打出"); }
+                if (!playerDraw) { playerDraw = deck.pop(); render(); }
+                else { updateStatus("請選擇一張牌打出"); }
                 return;
             }
             let disc = all.splice(selectedIndices[0], 1)[0];
             document.getElementById('discardPile').innerHTML += `<img class="discard-tile" src="${svgBase}${disc}.svg">`;
             playerHand = sortTiles(all);
-            drawTile = null;
+            playerDraw = null;
             selectedIndices = [];
-            updateStatus("等待對方出牌...");
+            updateStatus("對方思考中...");
             render();
             cpuPlay();
-        } else if (type === 'chi' || type === 'peng') {
-            if (selectedIndices.length !== 2) {
-                updateStatus("請先點選兩張手牌再執行" + (type === 'chi' ? '吃牌' : '碰牌'));
-                return;
-            }
-            
+        } else if (type === 'chi' || type === 'peng' || type === 'gang') {
             const selectedTiles = selectedIndices.map(i => all[i]);
-            const combined = [...selectedTiles, lastDiscard];
-            
             let isValid = false;
-            if (type === 'peng') {
-                isValid = selectedTiles.every(t => t === lastDiscard);
-            } else {
+            let group = [];
+
+            if (type === 'gang') {
+                // 暗槓：手牌選 4 張相同
+                if (selectedIndices.length === 4 && selectedTiles.every(t => t === selectedTiles[0])) {
+                    isValid = true;
+                    group = [...selectedTiles];
+                } 
+                // 明槓：手牌選 3 張與海底相同
+                else if (selectedIndices.length === 3 && selectedTiles.every(t => t === lastDiscard)) {
+                    isValid = true;
+                    group = [...selectedTiles, lastDiscard];
+                }
+            } else if (type === 'peng') {
+                if (selectedIndices.length === 2 && selectedTiles.every(t => t === lastDiscard)) {
+                    isValid = true;
+                    group = [lastDiscard, lastDiscard, lastDiscard];
+                }
+            } else if (type === 'chi') {
+                const combined = [...selectedTiles, lastDiscard];
                 const vals = combined.filter(t => t[1] === lastDiscard[1]).map(t => parseInt(t[0])).sort();
-                isValid = vals.length === 3 && (vals[2]-vals[1] === 1) && (vals[1]-vals[0] === 1);
+                if (vals.length === 3 && (vals[2]-vals[1]===1 && vals[1]-vals[0]===1)) {
+                    isValid = true;
+                    group = sortTiles(combined);
+                }
             }
 
             if (isValid) {
-                playerMelds.push(sortTiles(combined));
-                // 由大到小移除，避免 index 跑掉
+                playerMelds.push(group);
                 selectedIndices.sort((a,b) => b-a).forEach(i => all.splice(i, 1));
                 playerHand = sortTiles(all);
-                drawTile = null;
+                playerDraw = deck.pop(); // 槓牌或吃碰後補牌/維持出牌權
                 selectedIndices = [];
-                updateStatus("成立！請選一張牌打出");
+                updateStatus(type === 'gang' ? "槓！補摸一張牌，請出牌" : "成立！請出牌");
                 render();
             } else {
-                updateStatus("組合不符合規則，請重新選擇");
+                updateStatus("組合不符合規則，請重新點選手牌");
             }
+        } else if (type === 'win') {
+            alert("𓃥 白六金圓 結算中...\n底 100,000 + 台數加乘！");
         }
     };
 
