@@ -8,9 +8,9 @@
         :root { --bg-table: #2e7d32; --gold: #ffd700; --tile-w: 32px; }
         body { background-color: var(--bg-table); margin: 0; display: flex; flex-direction: column; align-items: center; height: 100dvh; font-family: sans-serif; color: white; overflow: hidden; padding-bottom: env(safe-area-inset-bottom); }
         .status-bar { background: rgba(0,0,0,0.8); padding: 4px 15px; border-radius: 20px; font-size: 0.8rem; border: 1px solid var(--gold); margin-top: 10px; display: flex; align-items: center; gap: 8px; z-index: 10; }
-        .gold-anim { color: var(--gold); font-weight: bold; }
-        .opp-area { width: 100%; display: flex; flex-direction: column; align-items: center; padding: 5px 0; min-height: 80px; background: rgba(0,0,0,0.2); }
-        .opp-hand-display { display: flex; gap: 2px; margin-bottom: 5px; }
+        .opp-area { width: 100%; display: flex; flex-direction: column; align-items: center; padding: 5px 0; min-height: 90px; background: rgba(0,0,0,0.3); border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .reveal-label { font-size: 0.7rem; color: var(--gold); margin-bottom: 2px; }
+        .opp-hand-display { display: flex; gap: 2px; }
         .meld-group { display: flex; gap: 1px; background: rgba(255,255,255,0.1); padding: 2px; border-radius: 3px; border: 1px solid rgba(255,255,255,0.3); }
         .tile-sm { width: 20px; border-radius: 2px; }
         .mahjong-area { flex: 1; display: flex; flex-direction: column; justify-content: space-between; width: 100%; max-width: 500px; padding: 5px; box-sizing: border-box; }
@@ -31,13 +31,11 @@
     </style>
 </head>
 <body>
-<div class="status-bar">
-    𓃥 白六 | <span id="totalGold">1,800,000</span> 金圓 
-    <span id="goldChange" class="gold-anim"></span>
-</div>
+<div class="status-bar">𓃥 白六 | <span id="totalGold">1,800,000</span> 金圓 <span id="goldChange" style="margin-left:5px; font-weight:bold;"></span></div>
 <div class="opp-area">
+    <div id="oppStatus" class="reveal-label">對手牌區</div>
     <div id="oppHandReveal" class="opp-hand-display"></div>
-    <div id="oppMelds" style="display:flex; gap:8px;"></div>
+    <div id="oppMelds" style="display:flex; gap:8px; margin-top:5px;"></div>
 </div>
 <div class="mahjong-area">
     <div id="discardPile" class="discard-area"></div>
@@ -70,6 +68,41 @@ const game = (() => {
         return (parseInt(a) + order[a.slice(-1)]) - (parseInt(b) + order[b.slice(-1)]);
     });
 
+    const checkWin = (tiles) => {
+        if (tiles.length % 3 !== 2) return false;
+        const counts = {}; tiles.forEach(t => counts[t] = (counts[t] || 0) + 1);
+        for (let eye in counts) {
+            if (counts[eye] >= 2) {
+                const rem = [...tiles];
+                rem.splice(rem.indexOf(eye), 1); rem.splice(rem.indexOf(eye), 1);
+                if (canSplit(rem)) return true;
+            }
+        }
+        return false;
+    };
+
+    const canSplit = (tiles) => {
+        if (tiles.length === 0) return true;
+        const sorted = sortTiles(tiles);
+        const f = sorted[0];
+        // 刻子
+        if (sorted.filter(t => t === f).length >= 3) {
+            const next = [...sorted]; next.splice(0,3);
+            if (canSplit(next)) return true;
+        }
+        // 順子
+        if (!f.endsWith('z')) {
+            const n = parseInt(f), s = f.slice(-1);
+            const t2 = (n+1)+s, t3 = (n+2)+s;
+            if (sorted.includes(t2) && sorted.includes(t3)) {
+                const next = [...sorted];
+                next.splice(next.indexOf(f), 1); next.splice(next.indexOf(t2), 1); next.splice(next.indexOf(t3), 1);
+                if (canSplit(next)) return true;
+            }
+        }
+        return false;
+    };
+
     const init = () => {
         deck = []; discards = []; playerMelds = []; oppMelds = [];
         ['m','p','s'].forEach(t => { for(let i=1;i<=9;i++) for(let j=0;j<4;j++) deck.push(`${i}${t}`); });
@@ -78,7 +111,8 @@ const game = (() => {
         playerHand = sortTiles(deck.splice(0,16)); 
         oppHand = sortTiles(deck.splice(0,16)); 
         playerDrawTile = null; isWaitingForDiscard = false; selectedIndices = []; activeMode = null;
-        document.getElementById('oppHandReveal').innerHTML = ''; // 清空上局亮牌
+        document.getElementById('oppHandReveal').innerHTML = '';
+        document.getElementById('oppStatus').innerText = "對手牌區";
         render();
     };
 
@@ -108,6 +142,43 @@ const game = (() => {
         else mainBtn.innerText = "摸牌";
     };
 
+    const opponentTurn = (lastDiscard) => {
+        // 先檢查放槍胡牌
+        if (checkWin([...oppHand, lastDiscard])) { handleWin(false, lastDiscard); return; }
+        
+        const count = oppHand.filter(t => t === lastDiscard).length;
+        if (count >= 2) {
+            discards.pop();
+            oppMelds.push([lastDiscard, lastDiscard, lastDiscard]);
+            oppHand = oppHand.filter(t => t !== lastDiscard);
+        } else {
+            const draw = deck.pop();
+            if (checkWin([...oppHand, draw])) { oppHand.push(draw); handleWin(false); return; }
+            oppHand.push(draw);
+        }
+        oppHand = sortTiles(oppHand);
+        discards.push(oppHand.splice(Math.floor(Math.random()*oppHand.length), 1)[0]);
+        render();
+    };
+
+    const handleWin = (isPlayer, winTile = null) => {
+        if(isPlayer) {
+            const all = playerDrawTile ? [...playerHand, playerDrawTile] : [...playerHand];
+            if (!checkWin(all)) { alert("炸胡警告！手牌未符合胡牌組合。"); return; }
+            const total = 10000; totalGold += total; init();
+        } else {
+            document.getElementById('oppStatus').innerText = "【對手胡牌 - 牌組公開】";
+            document.getElementById('oppHandReveal').innerHTML = sortTiles(oppHand).map(t => `<img class="tile-sm" src="${svgBase}${t}.svg">`).join('') + 
+                                   (winTile ? `<div style="border:1px solid yellow; margin-left:5px;"><img class="tile-sm" src="${svgBase}${winTile}.svg"></div>` : '');
+            
+            const base = 5000, tai = 4, total = base + (tai * 2000);
+            setTimeout(() => {
+                alert(`對手合法胡牌！\n分類：[${winTile?'榮和':'自摸'}]\n損失金圓：${total.toLocaleString()}`);
+                totalGold -= total; init();
+            }, 800);
+        }
+    };
+
     const userAction = () => {
         if (activeMode) {
             const lastD = discards.pop();
@@ -117,85 +188,24 @@ const game = (() => {
             else { playerMelds.push(sortTiles([lastD, ...picked])); isWaitingForDiscard = true; }
             activeMode = null; selectedIndices = []; render(); return;
         }
-        if (!playerDrawTile && !isWaitingForDiscard) { 
-            playerDrawTile = deck.pop(); 
-            render(); scrollToEnd(); return; 
-        }
+        if (!playerDrawTile && !isWaitingForDiscard) { playerDrawTile = deck.pop(); render(); return; }
         if (selectedIndices.length === 1) {
             let all = [...playerHand]; if(playerDrawTile) all.push(playerDrawTile);
-            const discardedTile = all.splice(selectedIndices[0], 1)[0];
-            discards.push(discardedTile);
+            const discarded = all.splice(selectedIndices[0], 1)[0];
             playerHand = sortTiles(all); playerDrawTile = null; selectedIndices = []; isWaitingForDiscard = false;
-            render();
-            setTimeout(() => opponentTurn(discardedTile), 600);
+            discards.push(discarded); render();
+            setTimeout(() => opponentTurn(discarded), 600);
         }
-    };
-
-    const opponentTurn = (lastDiscard) => {
-        // AI 判斷胡牌 (簡易模擬)
-        if (Math.random() < 0.05) { handleWin(false, lastDiscard); return; }
-
-        const count = oppHand.filter(t => t === lastDiscard).length;
-        if (count >= 2) {
-            discards.pop();
-            oppMelds.push([lastDiscard, lastDiscard, lastDiscard]);
-            oppHand = oppHand.filter(t => t !== lastDiscard);
-        } else {
-            oppHand.push(deck.pop());
-        }
-        
-        // AI 摸牌後檢查胡牌
-        if (Math.random() < 0.05) { handleWin(false); return; }
-
-        discards.push(oppHand.splice(Math.floor(Math.random()*oppHand.length), 1)[0]);
-        render();
-    };
-
-    const handleWin = (isPlayer, winTile = null) => {
-        const changeEl = document.getElementById('goldChange');
-        
-        if(isPlayer) {
-            const total = 8000 + (Math.floor(Math.random()*5)*1000);
-            alert(`恭喜胡牌！贏得 ${total.toLocaleString()} 金圓`);
-            totalGold += total;
-            changeEl.innerText = `+${total}`;
-            init();
-        } else {
-            // 亮出對手手牌
-            const revealArea = document.getElementById('oppHandReveal');
-            revealArea.innerHTML = oppHand.map(t => `<img class="tile-sm" src="${svgBase}${t}.svg">`).join('') + 
-                                   (winTile ? `<div style="border:1px solid yellow; padding:1px;"><img class="tile-sm" src="${svgBase}${winTile}.svg"></div>` : '');
-            
-            const taiItems = ["底 (1台)", "自摸 (1台)", "對對胡 (4台)", "大三元 (8台)"];
-            const randomTai = taiItems.slice(0, Math.floor(Math.random()*3)+2);
-            const total = 5000 + (randomTai.length * 2000);
-            
-            setTimeout(() => {
-                alert(`對手胡牌！\n組合內容：\n- ${randomTai.join('\n- ')}\n\n總計損失：${total.toLocaleString()} 金圓`);
-                totalGold -= total;
-                changeEl.innerText = `-${total}`;
-                setTimeout(() => { changeEl.innerText = ""; init(); }, 1000);
-            }, 500);
-        }
-    };
-
-    const scrollToEnd = () => {
-        const container = document.getElementById('scrollContainer');
-        setTimeout(() => { container.scrollLeft = container.scrollWidth; }, 50);
     };
 
     const handleGang = () => {
-        const allTiles = playerDrawTile ? [...playerHand, playerDrawTile] : [...playerHand];
-        const counts = {};
-        allTiles.forEach(t => counts[t] = (counts[t] || 0) + 1);
-        for (let t in counts) {
-            if (counts[t] === 4) {
-                if(confirm(`暗槓 ${t}？`)) {
-                    playerHand = allTiles.filter(tile => tile !== t);
-                    playerMelds.push([t, t, t, t]);
-                    playerDrawTile = deck.pop();
-                    render(); return;
-                }
+        const all = playerDrawTile ? [...playerHand, playerDrawTile] : [...playerHand];
+        const counts = {}; all.forEach(t => counts[t] = (counts[t] || 0) + 1);
+        for (let t in counts) if (counts[t] === 4) {
+            if(confirm(`暗槓 ${t}？`)) {
+                playerHand = all.filter(tile => tile !== t);
+                playerMelds.push([t, t, t, t]); playerDrawTile = deck.pop();
+                render(); return;
             }
         }
         game.modeToggle('gang');
