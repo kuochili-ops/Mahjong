@@ -7,7 +7,8 @@
     <style>
         :root { --bg-table: #2e7d32; --gold: #ffd700; --tile-w: 32px; }
         body { background-color: var(--bg-table); margin: 0; display: flex; flex-direction: column; align-items: center; height: 100dvh; font-family: sans-serif; color: white; overflow: hidden; padding-bottom: env(safe-area-inset-bottom); }
-        .status-bar { background: rgba(0,0,0,0.8); padding: 4px 15px; border-radius: 20px; font-size: 0.8rem; border: 1px solid var(--gold); margin-top: 10px; }
+        .status-bar { background: rgba(0,0,0,0.8); padding: 4px 15px; border-radius: 20px; font-size: 0.8rem; border: 1px solid var(--gold); margin-top: 10px; display: flex; align-items: center; gap: 8px; }
+        .gold-anim { color: var(--gold); font-weight: bold; transition: 0.5s; }
         .opp-area { width: 100%; display: flex; justify-content: center; padding: 5px 0; min-height: 40px; background: rgba(0,0,0,0.1); }
         .meld-group { display: flex; gap: 1px; background: rgba(255,255,255,0.1); padding: 2px; border-radius: 3px; border: 1px solid rgba(255,255,255,0.3); }
         .meld-tile-sm { width: 22px; }
@@ -22,24 +23,25 @@
         .tile img { width: 100%; border-radius: 3px; display: block; }
         .tile.selected { transform: translateY(-12px); outline: 2px solid var(--gold); }
         .draw-gap { margin-left: 15px; position: relative; }
-        .draw-gap::before { content: ""; position: absolute; left: -8px; top: 10%; height: 80%; width: 1px; background: rgba(255,255,255,0.3); }
         .action-bar { display: flex; justify-content: center; gap: 6px; margin-bottom: 8px; width: 95%; }
         .btn { padding: 10px 0; background: #e0e0e0; border: none; border-radius: 6px; font-weight: bold; flex: 1; color: #333; font-size: 0.9rem; }
-        .btn.active-mode { background: var(--gold) !important; }
         .control-panel { width: 100%; display: flex; justify-content: center; padding: 10px 0 30px 0; background: rgba(0,0,0,0.2); }
         .btn-main { width: 90%; height: 50px; background: #fff; color: #d32f2f; font-size: 1.2rem; border: none; border-radius: 8px; font-weight: bold; }
     </style>
 </head>
 <body>
-<div class="status-bar">𓃥 白六台灣麻將 | <span id="totalGold">1,800,000</span> 金圓</div>
+<div class="status-bar">
+    𓃥 白六台灣麻將 | <span id="totalGold">1,800,000</span> 金圓 
+    <span id="goldChange" class="gold-anim"></span>
+</div>
 <div class="opp-area"><div id="oppMelds" style="display:flex; gap:8px;"></div></div>
 <div class="mahjong-area">
     <div id="discardPile" class="discard-area"></div>
     <div class="action-bar">
-        <button id="btn-chi" class="btn" onclick="game.modeToggle('chi')">吃</button>
-        <button id="btn-peng" class="btn" onclick="game.modeToggle('peng')">碰</button>
-        <button id="btn-gang" class="btn" onclick="game.handleGang()">槓</button>
-        <button id="btn-win" class="btn" style="background:var(--gold)" onclick="game.handleWin()">胡</button>
+        <button class="btn" onclick="game.modeToggle('chi')">吃</button>
+        <button class="btn" onclick="game.modeToggle('peng')">碰</button>
+        <button class="btn" onclick="game.handleGang()">槓</button>
+        <button class="btn" style="background:var(--gold)" onclick="game.handleWin(true)">胡</button>
     </div>
     <div id="scrollContainer" class="hand-scroll-container">
         <div class="hand-row">
@@ -101,27 +103,6 @@ const game = (() => {
         else mainBtn.innerText = "摸牌";
     };
 
-    const handleGang = () => {
-        const allTiles = playerDrawTile ? [...playerHand, playerDrawTile] : [...playerHand];
-        const counts = {};
-        allTiles.forEach(t => counts[t] = (counts[t] || 0) + 1);
-        
-        // 優先檢查暗槓 (手牌已有四張)
-        for (let t in counts) {
-            if (counts[t] === 4) {
-                if(confirm(`執行 ${t} 暗槓？`)) {
-                    playerHand = allTiles.filter(tile => tile !== t);
-                    playerMelds.push([t, t, t, t]);
-                    playerDrawTile = deck.pop();
-                    render(); scrollToEnd();
-                    return;
-                }
-            }
-        }
-        // 若無暗槓，切換為明槓模式 (需點選三張與捨牌區相同之牌)
-        game.modeToggle('gang');
-    };
-
     const toggleSelect = (i) => {
         if(activeMode) {
             const target = (activeMode === 'gang') ? 3 : 2;
@@ -134,19 +115,16 @@ const game = (() => {
 
     const userAction = () => {
         if (activeMode) {
-            const target = (activeMode === 'gang') ? 3 : 2;
-            if (selectedIndices.length !== target) return;
             const lastD = discards.pop();
             const picked = selectedIndices.map(idx => (idx === playerHand.length) ? playerDrawTile : playerHand[idx]);
             playerHand = playerHand.filter((_, idx) => !selectedIndices.includes(idx));
             if (activeMode === 'gang') { playerMelds.push([lastD, ...picked, lastD]); playerDrawTile = deck.pop(); }
             else { playerMelds.push(sortTiles([lastD, ...picked])); isWaitingForDiscard = true; }
-            activeMode = null; selectedIndices = []; render(); scrollToEnd(); return;
+            activeMode = null; selectedIndices = []; render(); return;
         }
         if (!playerDrawTile && !isWaitingForDiscard) { 
             playerDrawTile = deck.pop(); 
-            render(); scrollToEnd(); 
-            return; 
+            render(); scrollToEnd(); return; 
         }
         if (selectedIndices.length === 1) {
             let all = [...playerHand]; if(playerDrawTile) all.push(playerDrawTile);
@@ -159,6 +137,7 @@ const game = (() => {
     };
 
     const opponentTurn = (lastDiscard) => {
+        // AI 邏輯：碰或摸
         const count = oppHand.filter(t => t === lastDiscard).length;
         if (count >= 2) {
             discards.pop();
@@ -167,8 +146,31 @@ const game = (() => {
         } else {
             oppHand.push(deck.pop());
         }
+        // AI 模擬檢查胡牌 (機率性胡牌模擬)
+        if (Math.random() < 0.05) { handleWin(false); return; }
+
         discards.push(oppHand.splice(Math.floor(Math.random()*oppHand.length), 1)[0]);
         render();
+    };
+
+    const handleWin = (isPlayer) => {
+        const base = 5000;
+        const tai = Math.floor(Math.random() * 5) + 3; // 隨機台數模擬
+        const total = base + (tai * 1000);
+        
+        const changeEl = document.getElementById('goldChange');
+        if(isPlayer) {
+            alert(`恭喜胡牌！贏得 ${total.toLocaleString()} 金圓 (${tai}台)`);
+            totalGold += total;
+            changeEl.innerText = `+${total}`;
+        } else {
+            alert(`對手胡牌！損失 ${total.toLocaleString()} 金圓`);
+            totalGold -= total;
+            changeEl.innerText = `-${total}`;
+        }
+        
+        setTimeout(() => { changeEl.innerText = ""; }, 2000);
+        init();
     };
 
     const scrollToEnd = () => {
@@ -176,11 +178,21 @@ const game = (() => {
         setTimeout(() => { container.scrollLeft = container.scrollWidth; }, 50);
     };
 
-    const handleWin = () => {
-        const items = [{n:"底", t:1}, {n:"門清", t:1}, {n:"自摸", t:1}];
-        const totalTai = items.reduce((a, b) => a + b.t, 0);
-        alert(`胡牌結算：\n${items.map(i=>`${i.n}: ${i.t}台`).join('\n')}\n總計: ${totalTai}台`);
-        totalGold += 10000; init();
+    const handleGang = () => {
+        const allTiles = playerDrawTile ? [...playerHand, playerDrawTile] : [...playerHand];
+        const counts = {};
+        allTiles.forEach(t => counts[t] = (counts[t] || 0) + 1);
+        for (let t in counts) {
+            if (counts[t] === 4) {
+                if(confirm(`暗槓 ${t}？`)) {
+                    playerHand = allTiles.filter(tile => tile !== t);
+                    playerMelds.push([t, t, t, t]);
+                    playerDrawTile = deck.pop();
+                    render(); return;
+                }
+            }
+        }
+        game.modeToggle('gang');
     };
 
     const modeToggle = (m) => { activeMode = (activeMode === m) ? null : m; selectedIndices = []; render(); };
