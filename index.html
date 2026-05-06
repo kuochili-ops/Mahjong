@@ -27,7 +27,7 @@
         .discard-tile { width: 22px; height: auto; margin: 0 auto; }
         .discard-tile.last { border: 2px solid var(--gold); box-shadow: 0 0 5px var(--gold); }
         
-        .hand-scroll-container { width: 100%; overflow-x: auto; padding: 10px 0; }
+        .hand-scroll-container { width: 100%; overflow-x: auto; padding: 10px 0; scroll-behavior: smooth; }
         .hand-row { display: inline-flex; align-items: flex-end; min-height: 60px; gap: 3px; padding: 0 10px; }
         .meld-zone { display: flex; gap: 5px; margin-right: 8px; border-right: 1px solid rgba(255,255,255,0.3); padding-right: 8px; }
         .meld-group { display: flex; gap: 1px; background: rgba(255,255,255,0.1); padding: 1px; border-radius: 2px; }
@@ -49,7 +49,7 @@
 </head>
 <body>
 <div class="status-container">
-    <div class="status-bar" id="status">𓃥 白六台灣麻將 (胡牌修正版)</div>
+    <div class="status-bar" id="status">𓃥 白六台灣麻將 (智慧偵測版)</div>
     <div class="money-tag" id="totalGold">持有金圓：1,800,000</div>
 </div>
 
@@ -65,7 +65,7 @@
         <button id="btn-gang" class="btn" onclick="game.modeToggle('gang')">槓</button>
         <button id="btn-win" class="btn" style="background:var(--gold)" onclick="game.handleWin()">胡</button>
     </div>
-    <div class="hand-scroll-container">
+    <div id="scrollContainer" class="hand-scroll-container">
         <div class="hand-row">
             <div id="playerMelds" class="meld-zone"></div>
             <div id="playerTiles" style="display:flex; gap:3px;"></div>
@@ -130,7 +130,21 @@ const game = (() => {
         const lastD = discards[discards.length-1];
         document.querySelectorAll('.btn').forEach(b => b.classList.remove('hint', 'active-mode'));
         if(!lastD || isWaitingForDiscard || playerDrawTile) return;
+
+        // 偵測碰/槓
         if(playerHand.filter(t => t === lastD).length >= 2) document.getElementById('btn-peng').classList.add('hint');
+        if(playerHand.filter(t => t === lastD).length === 3) document.getElementById('btn-gang').classList.add('hint');
+        
+        // 偵測吃
+        if(!lastD.endsWith('z')) {
+            const num = parseInt(lastD), suit = lastD.slice(-1);
+            const patterns = [
+                [num-2, num-1], [num-1, num+1], [num+1, num+2]
+            ];
+            const canChi = patterns.some(p => p.every(n => playerHand.includes(n + suit)));
+            if(canChi) document.getElementById('btn-chi').classList.add('hint');
+        }
+        
         if(activeMode) document.getElementById(`btn-${activeMode}`).classList.add('active-mode');
     };
 
@@ -150,7 +164,11 @@ const game = (() => {
 
     const userAction = () => {
         if (!playerDrawTile && !isWaitingForDiscard) {
-            playerDrawTile = deck.pop(); render();
+            playerDrawTile = deck.pop();
+            render();
+            // 自動捲動到最右側
+            const container = document.getElementById('scrollContainer');
+            setTimeout(() => { container.scrollLeft = container.scrollWidth; }, 100);
         } else if (selectedIndices.length === 1) {
             let all = [...playerHand]; if(playerDrawTile) all.push(playerDrawTile);
             discards.push(all.splice(selectedIndices[0], 1)[0]);
@@ -167,7 +185,6 @@ const game = (() => {
         render();
     };
 
-    // 修正後的胡牌判定邏輯
     const canWin = (tiles) => {
         if (tiles.length % 3 !== 2) return false;
         const counts = {}; tiles.forEach(t => counts[t] = (counts[t] || 0) + 1);
@@ -189,12 +206,10 @@ const game = (() => {
             return (parseInt(a) + order[a.slice(-1)]) - (parseInt(b) + order[b.slice(-1)]);
         });
         const first = tiles[0];
-        // 嘗試作為刻子
         if (tiles.filter(t => t === first).length >= 3) {
             const next = [...tiles]; next.splice(0, 3);
             if (checkMeldsRecursive(next)) return true;
         }
-        // 嘗試作為順子 (排除字牌z)
         if (!first.endsWith('z')) {
             const num = parseInt(first), suit = first.slice(-1);
             const t2 = (num + 1) + suit, t3 = (num + 2) + suit;
@@ -209,24 +224,25 @@ const game = (() => {
         return false;
     };
 
-    const calculateTai = (hand, melds) => {
-        let tai = 1; // 基礎底台
-        if (melds.length === 0) tai += 8; // 門清自摸(模擬)
-        if (hand.every(t => t.endsWith('z'))) tai += 16; // 全字色
+    const calculateTai = (hand, melds, isZiMo) => {
+        let tai = 1; // 基礎台
+        if (isZiMo) tai += 1; // 自摸加一台
+        if (melds.length === 0) tai += 8; // 門清自摸
         return tai;
     };
 
     const handleWin = () => {
         let all = [...playerHand]; if(playerDrawTile) all.push(playerDrawTile);
         if (canWin(all)) {
-            const tai = calculateTai(all, playerMelds);
+            const isZiMo = !!playerDrawTile;
+            const tai = calculateTai(all, playerMelds, isZiMo);
             const winAmount = BASE_MONEY + (tai * TAI_MONEY);
             totalGold += winAmount;
-            alert(`胡牌！共 ${tai} 台\n計算：${BASE_MONEY} (底) + ${tai}x${TAI_MONEY} (台)\n獲得：${winAmount.toLocaleString()} 金圓`);
+            alert(`${isZiMo ? '自摸' : '胡牌'}！共 ${tai} 台\n計算：${BASE_MONEY} (底) + ${tai}x${TAI_MONEY} (台)\n獲得：${winAmount.toLocaleString()} 金圓`);
             init();
         } else {
             const penalty = 30000; totalGold -= penalty;
-            alert(`炸胡！未達成胡牌條件。\n扣除白六金圓：${penalty.toLocaleString()}`);
+            alert(`炸胡！扣除白六金圓：${penalty.toLocaleString()}`);
             render();
         }
     };
