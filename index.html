@@ -65,6 +65,51 @@ const game = (() => {
         return (parseInt(a) + order[a.slice(-1)]) - (parseInt(b) + order[b.slice(-1)]);
     });
 
+    // 核心胡牌判定演算法
+    const checkWin = (tiles) => {
+        if (tiles.length % 3 !== 2) return false;
+        const counts = {}; tiles.forEach(t => counts[t] = (counts[t] || 0) + 1);
+        const uniqueTiles = Object.keys(counts);
+        
+        for (let eye of uniqueTiles) {
+            if (counts[eye] >= 2) {
+                const rem = [...tiles];
+                rem.splice(rem.indexOf(eye), 1);
+                rem.splice(rem.indexOf(eye), 1);
+                if (canSplit(rem)) return true;
+            }
+        }
+        return false;
+    };
+
+    const canSplit = (tiles) => {
+        if (tiles.length === 0) return true;
+        const sorted = sortTiles(tiles);
+        const f = sorted[0];
+        const counts = sorted.filter(t => t === f).length;
+
+        // 1. 嘗試作為刻子 (AAA)
+        if (counts >= 3) {
+            const next = [...sorted];
+            next.splice(0, 3);
+            if (canSplit(next)) return true;
+        }
+
+        // 2. 嘗試作為順子 (ABC)，字牌不可組成順子
+        if (!f.endsWith('z')) {
+            const n = parseInt(f), s = f.slice(-1);
+            const t2 = (n + 1) + s, t3 = (n + 2) + s;
+            if (sorted.includes(t2) && sorted.includes(t3)) {
+                const next = [...sorted];
+                next.splice(next.indexOf(f), 1);
+                next.splice(next.indexOf(t2), 1);
+                next.splice(next.indexOf(t3), 1);
+                if (canSplit(next)) return true;
+            }
+        }
+        return false;
+    };
+
     const init = () => {
         deck = []; discards = []; playerMelds = []; oppMelds = [];
         ['m','p','s'].forEach(t => { for(let i=1;i<=9;i++) for(let j=0;j<4;j++) deck.push(`${i}${t}`); });
@@ -104,30 +149,26 @@ const game = (() => {
         else mainBtn.innerText = "摸牌";
     };
 
-    const scrollToEnd = () => {
-        const container = document.getElementById('scrollContainer');
-        setTimeout(() => { container.scrollLeft = container.scrollWidth; }, 100);
+    const handleWin = (isPlayer) => {
+        const lastDiscard = discards[discards.length - 1];
+        let all = playerDrawTile ? [...playerHand, playerDrawTile] : [...playerHand, lastDiscard];
+        
+        if (checkWin(all)) {
+            alert(isPlayer ? "恭喜您胡牌了！" : "對手胡牌了！");
+            init();
+        } else {
+            alert("目前牌組尚未符合胡牌條件。");
+        }
     };
 
     const handleGangLogic = () => {
         if (playerDrawTile) {
-            // 加槓
             for (let i = 0; i < playerMelds.length; i++) {
                 if (playerMelds[i].length === 3 && playerMelds[i][0] === playerDrawTile) {
                     if (confirm(`執行 ${playerDrawTile} 加槓？`)) {
                         playerMelds[i].push(playerDrawTile); playerDrawTile = deck.pop();
-                        render(); scrollToEnd(); return;
+                        render(); return;
                     }
-                }
-            }
-            // 暗槓
-            const all = [...playerHand, playerDrawTile];
-            const counts = {}; all.forEach(t => counts[t] = (counts[t] || 0) + 1);
-            for (let t in counts) if (counts[t] === 4) {
-                if (confirm(`暗槓 ${t}？`)) {
-                    playerHand = all.filter(tile => tile !== t);
-                    playerMelds.push([t, t, t, t]); playerDrawTile = deck.pop();
-                    render(); scrollToEnd(); return;
                 }
             }
         }
@@ -140,16 +181,12 @@ const game = (() => {
             const picked = selectedIndices.map(idx => (idx === playerHand.length) ? playerDrawTile : playerHand[idx]);
             playerHand = playerHand.filter((_, idx) => !selectedIndices.includes(idx));
             playerMelds.push(sortTiles([...picked, lastD]));
-            if (activeMode === 'gang') { 
-                playerDrawTile = deck.pop(); scrollToEnd(); 
-            } else {
-                isWaitingForDiscard = true; // 吃/碰後進入放牌狀態
-            }
+            isWaitingForDiscard = true;
             activeMode = null; selectedIndices = []; render(); return;
         }
 
         if (!playerDrawTile && !isWaitingForDiscard) { 
-            playerDrawTile = deck.pop(); render(); scrollToEnd(); return; 
+            playerDrawTile = deck.pop(); render(); return; 
         }
 
         if (selectedIndices.length === 1) {
@@ -181,7 +218,7 @@ const game = (() => {
 
     const modeToggle = (m) => { activeMode = (activeMode === m) ? null : m; selectedIndices = []; render(); };
 
-    return { init, userAction, modeToggle, handleGangLogic };
+    return { init, userAction, modeToggle, handleGangLogic, handleWin };
 })();
 window.onload = game.init;
 </script>
