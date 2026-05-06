@@ -7,70 +7,52 @@
     <style>
         :root { --bg-table: #2e7d32; --gold: #ffd700; --tile-w: 34px; }
         body { background-color: var(--bg-table); margin: 0; display: flex; flex-direction: column; align-items: center; height: 100dvh; font-family: sans-serif; color: white; overflow: hidden; padding-bottom: env(safe-area-inset-bottom); }
-        
         .status-bar { background: rgba(0,0,0,0.8); padding: 5px 15px; border-radius: 20px; font-size: 0.8rem; border: 1px solid var(--gold); margin: 8px 0; z-index: 20; }
-        
-        /* 對手預留區：兩列空間 */
         .opp-zone { width: 100%; display: flex; flex-direction: column; align-items: center; min-height: 100px; padding: 5px 0; gap: 8px; background: rgba(0,0,0,0.1); }
         .opp-row { display: flex; gap: 4px; justify-content: center; min-height: 40px; width: 100%; }
-        
         .discard-area { flex: 1; width: 95%; max-width: 420px; background: rgba(0,0,0,0.1); border-radius: 12px; margin: 5px 0; display: grid; grid-template-columns: repeat(9, 1fr); grid-auto-rows: 32px; gap: 4px; padding: 10px; overflow-y: auto; }
         .discard-tile { width: 26px; margin: 0 auto; }
-        
         .action-bar { display: flex; justify-content: center; gap: 8px; margin-bottom: 10px; width: 90%; }
-        .btn-opt { padding: 12px 0; background: #eee; border: none; border-radius: 8px; font-weight: bold; flex: 1; color: #333; font-size: 0.9rem; opacity: 0.4; }
-        .btn-opt.active { opacity: 1; background: var(--gold); box-shadow: 0 3px 0 #b8860b; }
-
+        .btn-opt { padding: 12px 0; background: #eee; border: none; border-radius: 8px; font-weight: bold; flex: 1; color: #333; font-size: 0.9rem; opacity: 0.3; pointer-events: none; }
+        .btn-opt.active { opacity: 1; background: var(--gold); box-shadow: 0 3px 0 #b8860b; pointer-events: auto; }
         .player-zone { width: 100%; background: rgba(0,0,0,0.2); padding: 15px 0; position: relative; }
         .hand-scroll-container { width: 100%; overflow-x: auto; padding: 0 20px; scroll-behavior: smooth; }
-        .hand-row { display: flex; align-items: flex-end; min-height: 70px; gap: 4px; width: max-content; padding-right: 50px; }
-        
+        .hand-row { display: flex; align-items: flex-end; min-height: 70px; gap: 4px; width: max-content; padding-right: 60px; }
         .tile { width: var(--tile-w); transition: transform 0.2s; }
         .tile img { width: 100%; border-radius: 4px; display: block; box-shadow: 2px 2px 5px rgba(0,0,0,0.4); }
         .tile.selected img { outline: 3px solid var(--gold); transform: translateY(-15px); }
-        
-        .draw-gap { margin-left: 15px; border-left: 2px solid var(--gold); padding-left: 8px; }
-        
+        .draw-gap { margin-left: 20px; border-left: 2px solid var(--gold); padding-left: 10px; }
         .tile-sm { width: 26px; }
         .meld-group { display: flex; gap: 1px; background: rgba(255,255,255,0.1); padding: 3px; border-radius: 4px; }
-
         .control-panel { width: 100%; display: flex; justify-content: center; padding: 15px 0 45px 0; }
         .btn-main { width: 90%; height: 60px; background: #fff; color: #d32f2f; font-size: 1.4rem; border: none; border-radius: 12px; font-weight: bold; box-shadow: 0 4px 0 #bbb; }
     </style>
 </head>
 <body>
-
-<div class="status-bar">
-    𓃥 白六 | <span id="totalGold">1,850,000</span> 金圓 | 剩餘: <span id="deckCount">0</span> 張
-</div>
-
+<div class="status-bar">𓃥 白六 | <span id="totalGold">1,850,000</span> 金圓 | 剩餘: <span id="deckCount">0</span> 張</div>
 <div class="opp-zone">
-    <div id="oppMelds" class="opp-row"></div> <div id="oppWinHand" class="opp-row"></div> </div>
-
-<div id="discardPile" class="discard-area"></div>
-
-<div class="action-bar">
-    <button id="btn-chi" class="btn-opt" onclick="game.handleMeld('chi')">吃</button>
-    <button id="btn-peng" class="btn-opt" onclick="game.handleMeld('peng')">碰</button>
-    <button id="btn-gang" class="btn-opt" onclick="game.handleMeld('gang')">槓</button>
-    <button id="btn-hu" class="btn-opt" style="background:#ff9800; color:white; opacity:1;" onclick="game.handleWin(true)">胡</button>
+    <div id="oppMelds" class="opp-row"></div>
+    <div id="oppWinHand" class="opp-row"></div>
 </div>
-
+<div id="discardPile" class="discard-area"></div>
+<div class="action-bar">
+    <button id="btn-chi" class="btn-opt" onclick="game.doMeld('chi')">吃</button>
+    <button id="btn-peng" class="btn-opt" onclick="game.doMeld('peng')">碰</button>
+    <button id="btn-gang" class="btn-opt" onclick="game.doMeld('gang')">槓</button>
+    <button id="btn-hu" class="btn-opt" style="background:#ff9800; color:white; opacity:1; pointer-events:auto;" onclick="game.handleWin(true)">胡</button>
+</div>
 <div class="player-zone">
     <div id="scrollWrapper" class="hand-scroll-container">
         <div class="hand-row" id="playerTiles"></div>
     </div>
 </div>
-
-<div class="control-panel">
-    <button id="btn-main-action" class="btn-main" onclick="game.userStep()">摸牌</button>
-</div>
+<div class="control-panel"><button id="btn-main-action" class="btn-main" onclick="game.userStep()">摸牌</button></div>
 
 <script>
 const game = (() => {
     const svgBase = `https://raw.githubusercontent.com/kuochili-ops/mahjong_graphic/main/${encodeURIComponent("Vectors 矢量图")}/SVG/`;
     let deck = [], playerHand = [], playerMelds = [], discards = [], oppHand = [], oppMelds = [];
-    let playerDrawTile = null, selectedIdx = null, canMeld = { chi:false, peng:false, gang:false };
+    let playerDrawTile = null, selectedIdx = null, lastOppTile = null;
 
     const sortTiles = (h) => [...h].sort((a,b) => {
         const order = {m:0, p:100, s:200, z:300};
@@ -91,7 +73,6 @@ const game = (() => {
         document.getElementById('deckCount').innerText = deck.length;
         document.getElementById('oppMelds').innerHTML = oppMelds.map(g => `<div class="meld-group">${g.map(t=>`<img class="tile-sm" src="${svgBase}${t}.svg">`).join('')}</div>`).join('');
         document.getElementById('oppWinHand').innerHTML = showOpp ? oppHand.map(t => `<img class="tile-sm" src="${svgBase}${t}.svg">`).join('') : "";
-
         const dp = document.getElementById('discardPile');
         dp.innerHTML = discards.map(t => `<img class="discard-tile" src="${svgBase}${t}.svg">`).join('');
         dp.scrollTop = dp.scrollHeight;
@@ -113,19 +94,13 @@ const game = (() => {
 
         if (playerDrawTile) {
             const div = document.createElement('div');
-            div.id = "newDrawTile"; // 設置 ID 用於對焦
+            div.id = "newDrawTile";
             div.className = `tile draw-gap ${selectedIdx === 99 ? 'selected' : ''}`;
             div.innerHTML = `<img src="${svgBase}${playerDrawTile}.svg">`;
             div.onclick = () => { selectedIdx = 99; render(); };
             pt.appendChild(div);
         }
-
         document.getElementById('btn-main-action').innerText = playerDrawTile ? "選擇放牌" : "摸牌";
-        
-        // 更新按鈕活性
-        document.getElementById('btn-chi').className = `btn-opt ${canMeld.chi?'active':''}`;
-        document.getElementById('btn-peng').className = `btn-opt ${canMeld.peng?'active':''}`;
-        document.getElementById('btn-gang').className = `btn-opt ${canMeld.gang?'active':''}`;
     };
 
     const userStep = () => {
@@ -133,46 +108,67 @@ const game = (() => {
             playerDrawTile = deck.pop();
             selectedIdx = 99;
             render();
-            // 強制物理對焦新牌
             setTimeout(() => {
                 const target = document.getElementById('newDrawTile');
                 if(target) target.scrollIntoView({ behavior: 'smooth', inline: 'end', block: 'nearest' });
             }, 100);
+            resetActions();
         } else if (selectedIdx !== null) {
             const disc = (selectedIdx === 99) ? playerDrawTile : playerHand.splice(selectedIdx, 1)[0];
             discards.push(disc);
             playerHand = sortTiles(playerHand);
             playerDrawTile = null; selectedIdx = null;
             render();
-            
-            // 對手回合
-            setTimeout(() => {
-                if (deck.length > 0) {
-                    const oppDisc = deck.pop();
-                    discards.push(oppDisc);
-                    checkPlayerCanMeld(oppDisc);
-                    render();
-                }
-            }, 600);
+            setTimeout(oppTurn, 600);
         }
     };
 
-    const checkPlayerCanMeld = (tile) => {
-        const count = playerHand.filter(t => t === tile).length;
-        canMeld.peng = count >= 2;
-        canMeld.gang = count >= 3;
-        // 簡易吃牌邏輯 (同花色且數值相鄰)
-        canMeld.chi = false; 
+    const oppTurn = () => {
+        if (deck.length > 0) {
+            lastOppTile = deck.pop();
+            discards.push(lastOppTile);
+            checkMeld(lastOppTile);
+            render();
+        }
     };
 
-    const handleWin = (isPlayer) => {
-        render(!isPlayer);
-        setTimeout(() => { alert(isPlayer ? "自摸胡牌！" : "對手胡牌！"); init(); }, 500);
+    const checkMeld = (t) => {
+        const val = parseInt(t), suit = t.slice(-1);
+        const count = playerHand.filter(x => x === t).length;
+        if(count >= 2) document.getElementById('btn-peng').classList.add('active');
+        if(count >= 3) document.getElementById('btn-gang').classList.add('active');
+        
+        const has = (v) => playerHand.includes(v + suit);
+        if(suit !== 'z' && ((has(val-2)&&has(val-1)) || (has(val-1)&&has(val+1)) || (has(val+1)&&has(val+2)))) {
+            document.getElementById('btn-chi').classList.add('active');
+        }
     };
 
-    return { init, userStep, handleWin, handleMeld: (type) => { if(canMeld[type]) alert('執行' + type); } };
+    const resetActions = () => {
+        ['btn-chi','btn-peng','btn-gang'].forEach(id => document.getElementById(id).classList.remove('active'));
+    };
+
+    const doMeld = (type) => {
+        if(type === 'peng') {
+            playerHand.splice(playerHand.indexOf(lastOppTile), 1);
+            playerHand.splice(playerHand.indexOf(lastOppTile), 1);
+            playerMelds.push([lastOppTile, lastOppTile, lastOppTile]);
+        }
+        discards.pop();
+        resetActions();
+        playerDrawTile = "dummy"; // 觸發出牌模式
+        playerDrawTile = null; 
+        render();
+        alert("執行 " + type + "！請從手牌選一張打出");
+    };
+
+    const handleWin = (isP) => {
+        render(!isP);
+        setTimeout(() => { alert(isP?"恭喜自摸！":"對手胡牌！"); init(); }, 500);
+    };
+
+    return { init, userStep, handleWin, doMeld };
 })();
-
 window.onload = game.init;
 </script>
 </body>
