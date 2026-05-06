@@ -20,9 +20,6 @@
         
         .mahjong-area { flex: 1; display: flex; flex-direction: column; justify-content: space-between; width: 100%; max-width: 500px; padding: 5px; box-sizing: border-box; }
         
-        .cpu-zone { display: flex; flex-direction: column; align-items: center; gap: 5px; }
-        .cpu-melds { display: flex; gap: 4px; min-height: 35px; }
-
         .discard-area { background: rgba(0,0,0,0.2); border-radius: 10px; flex: 1; margin: 10px 5px; display: grid; grid-template-columns: repeat(9, 1fr); grid-auto-rows: 32px; gap: 4px; padding: 8px; overflow-y: auto; }
         .discard-tile { width: 22px; height: auto; margin: 0 auto; }
         .discard-tile.last { border: 2px solid var(--gold); box-shadow: 0 0 5px var(--gold); }
@@ -40,7 +37,6 @@
         @keyframes flash-white { 0%, 100% { background: #e0e0e0; } 50% { background: #fff; box-shadow: 0 0 10px #fff; } }
         .btn { padding: 10px 0; background: #e0e0e0; border: none; border-radius: 6px; font-weight: bold; flex: 1; color: #333; font-size: 0.9rem; box-shadow: 0 3px 0 #888; }
         .btn.hint { animation: flash-white 0.8s infinite; }
-        .btn.active-mode { background: var(--gold) !important; color: #000; }
         .action-bar { display: flex; justify-content: center; gap: 6px; margin-bottom: 5px; width: 95%; }
         
         .control-panel { width: 100%; display: flex; justify-content: center; padding: 10px 0 25px 0; background: rgba(0,0,0,0.1); }
@@ -49,16 +45,12 @@
 </head>
 <body>
 <div class="status-container">
-    <div class="status-bar" id="status">𓃥 白六台灣麻將 (詳細計台版)</div>
+    <div class="status-bar" id="status">𓃥 白六台灣麻將 (正式胡牌修正版)</div>
     <div class="money-tag" id="totalGold">持有金圓：1,800,000</div>
 </div>
 
 <div class="mahjong-area">
-    <div class="cpu-zone">
-        <div id="cpuTiles" style="display:flex; gap:2px;"></div>
-        <div id="cpuMelds" class="cpu-melds"></div>
-    </div>
-    <div class="discard-area" id="discardPile"></div>
+    <div id="discardPile" class="discard-area"></div>
     <div class="action-bar">
         <button id="btn-chi" class="btn" onclick="game.modeToggle('chi')">吃</button>
         <button id="btn-peng" class="btn" onclick="game.modeToggle('peng')">碰</button>
@@ -79,24 +71,22 @@
 <script>
 const game = (() => {
     const svgBase = `https://raw.githubusercontent.com/kuochili-ops/mahjong_graphic/main/${encodeURIComponent("Vectors 矢量图")}/SVG/`;
-    let deck = [], playerHand = [], playerMelds = [], cpuHand = [], cpuMelds = [], discards = [];
+    let deck = [], playerHand = [], playerMelds = [], discards = [];
     let playerDrawTile = null, selectedIndices = [], activeMode = null;
-    let isWaitingForDiscard = false, totalGold = 1800000;
+    let totalGold = 1779000;
     const BASE_MONEY = 5000, TAI_MONEY = 2000;
 
     const sortTiles = (h) => h.sort((a,b) => {
         const order = {m:0, p:100, s:200, z:300};
-        const valA = parseInt(a) + order[a.slice(-1)];
-        const valB = parseInt(b) + order[b.slice(-1)];
-        return valA - valB;
+        return (parseInt(a) + order[a.slice(-1)]) - (parseInt(b) + order[b.slice(-1)]);
     });
 
     const init = () => {
-        deck = []; discards = []; playerMelds = []; cpuMelds = [];
+        deck = []; discards = []; playerMelds = [];
         ['m','p','s'].forEach(t => { for(let i=1;i<=9;i++) for(let j=0;j<4;j++) deck.push(`${i}${t}`); });
         for(let i=1;i<=7;i++) for(let j=0;j<4;j++) deck.push(`${i}z`); 
         for(let i=deck.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [deck[i],deck[j]]=[deck[j],deck[i]]; }
-        playerHand = sortTiles(deck.splice(0,16)); cpuHand = deck.splice(0,16); render();
+        playerHand = sortTiles(deck.splice(0,16)); render();
     };
 
     const render = () => {
@@ -111,8 +101,6 @@ const game = (() => {
             div.innerHTML = `<img src="${svgBase}${playerDrawTile}.svg">`; div.onclick = () => toggleSelect(i); pt.appendChild(div);
         }
         document.getElementById('playerMelds').innerHTML = playerMelds.map(g => `<div class="meld-group">${g.map(t=>`<div style="width:24px"><img src="${svgBase}${t}.svg" style="width:100%"></div>`).join('')}</div>`).join('');
-        document.getElementById('cpuTiles').innerHTML = Array(cpuHand.length).fill('<div style="width:14px;height:20px;background:var(--blue-back);border-radius:2px;border:1px solid #fff"></div>').join('');
-        document.getElementById('cpuMelds').innerHTML = cpuMelds.map(g => `<div class="meld-group">${g.map(t=>`<div style="width:20px"><img src="${svgBase}${t}.svg" style="width:100%"></div>`).join('')}</div>`).join('');
         document.getElementById('discardPile').innerHTML = discards.map((t,idx) => `<img class="discard-tile ${idx===discards.length-1?'last':''}" src="${svgBase}${t}.svg">`).join('');
         document.getElementById('totalGold').innerText = `持有金圓：${totalGold.toLocaleString()}`;
         checkHints();
@@ -128,70 +116,32 @@ const game = (() => {
 
     const checkHints = () => {
         const lastD = discards[discards.length-1];
-        document.querySelectorAll('.btn').forEach(b => b.classList.remove('hint', 'active-mode'));
-        if(!lastD || isWaitingForDiscard || playerDrawTile) return;
-
+        if(!lastD || playerDrawTile) return;
         if(playerHand.filter(t => t === lastD).length >= 2) document.getElementById('btn-peng').classList.add('hint');
         if(!lastD.endsWith('z')) {
             const num = parseInt(lastD), suit = lastD.slice(-1);
-            const patterns = [[num-2, num-1], [num-1, num+1], [num+1, num+2]];
-            if(patterns.some(p => p.every(n => playerHand.includes(n + suit)))) document.getElementById('btn-chi').classList.add('hint');
+            const canChi = [[num-2, num-1], [num-1, num+1], [num+1, num+2]].some(p => p.every(n => playerHand.includes(n + suit)));
+            if(canChi) document.getElementById('btn-chi').classList.add('hint');
         }
-        if(activeMode) document.getElementById(`btn-${activeMode}`).classList.add('active-mode');
-    };
-
-    const modeToggle = (mode) => {
-        if(activeMode === mode) executeAction(mode);
-        else { activeMode = mode; selectedIndices = []; render(); }
-    };
-
-    const executeAction = (mode) => {
-        const lastD = discards.pop();
-        const picked = selectedIndices.map(i => i < playerHand.length ? playerHand[i] : playerDrawTile);
-        playerMelds.push([lastD, ...picked]);
-        playerHand = sortTiles(playerHand.filter((_, i) => !selectedIndices.includes(i)));
-        if(mode === 'gang') playerDrawTile = deck.pop(); else isWaitingForDiscard = true;
-        activeMode = null; selectedIndices = []; render();
     };
 
     const userAction = () => {
-        if (!playerDrawTile && !isWaitingForDiscard) {
+        if (!playerDrawTile) {
             playerDrawTile = deck.pop(); render();
-            const container = document.getElementById('scrollContainer');
-            setTimeout(() => { container.scrollLeft = container.scrollWidth; }, 100);
+            const sc = document.getElementById('scrollContainer');
+            setTimeout(() => sc.scrollLeft = sc.scrollWidth, 100);
         } else if (selectedIndices.length === 1) {
-            let all = [...playerHand]; if(playerDrawTile) all.push(playerDrawTile);
+            let all = [...playerHand, playerDrawTile];
             discards.push(all.splice(selectedIndices[0], 1)[0]);
-            playerHand = sortTiles(all); playerDrawTile = null; selectedIndices = []; isWaitingForDiscard = false;
-            render(); setTimeout(cpuTurn, 600);
+            playerHand = sortTiles(all); playerDrawTile = null; selectedIndices = [];
+            render(); setTimeout(() => { discards.push(deck.pop()); render(); }, 600);
         }
     };
 
-    const cpuTurn = () => {
-        const lastD = discards[discards.length-1];
-        if(cpuHand.filter(t => t === lastD).length >= 2) {
-            cpuMelds.push([lastD, lastD, lastD]); cpuHand.splice(0, 2); discards.pop();
-        } else { cpuHand.push(deck.pop()); discards.push(cpuHand.pop()); }
-        render();
-    };
-
-    // 詳細計台功能
-    const getTaiReport = (hand, melds, isZiMo) => {
-        let items = [];
-        let total = 0;
-
-        if (isZiMo) { items.push({name: "自摸", count: 1}); total += 1; }
-        if (melds.length === 0) { items.push({name: "門清", count: 1}); total += 1; }
-        
-        // 簡易判定字牌刻子
-        const allTiles = [...hand, ...melds.flat()];
-        const counts = {}; allTiles.forEach(t => counts[t] = (counts[t] || 0) + 1);
-        ['1z','2z','3z','4z'].forEach(z => { if(counts[z]>=3) { items.push({name: "風刻", count: 1}); total += 1; } });
-        ['5z','6z','7z'].forEach(z => { if(counts[z]>=3) { items.push({name: "箭刻", count: 2}); total += 2; } });
-
-        if (allTiles.every(t => t.endsWith('z'))) { items.push({name: "全字一色", count: 16}); total += 16; }
-        
-        return { items, total };
+    const getTaiReport = (isZiMo) => {
+        let res = { items: [{name: isZiMo?"自摸":"胡牌", count: 1}], total: 1 };
+        if (playerMelds.length === 0) { res.items.push({name:"門清", count: 1}); res.total += 1; }
+        return res;
     };
 
     const canWin = (tiles) => {
@@ -199,64 +149,66 @@ const game = (() => {
         const counts = {}; tiles.forEach(t => counts[t] = (counts[t] || 0) + 1);
         for (let eye in counts) {
             if (counts[eye] >= 2) {
-                const remaining = [...tiles];
-                remaining.splice(remaining.indexOf(eye), 1);
-                remaining.splice(remaining.indexOf(eye), 1);
-                if (checkMeldsRecursive(remaining)) return true;
+                const rem = [...tiles];
+                rem.splice(rem.indexOf(eye), 1); rem.splice(rem.indexOf(eye), 1);
+                if (checkRecursive(rem)) return true;
             }
         }
         return false;
     };
 
-    const checkMeldsRecursive = (tiles) => {
+    const checkRecursive = (tiles) => {
         if (tiles.length === 0) return true;
         tiles.sort((a,b) => {
             const order = {m:0, p:100, s:200, z:300};
             return (parseInt(a) + order[a.slice(-1)]) - (parseInt(b) + order[b.slice(-1)]);
         });
-        const first = tiles[0];
-        if (tiles.filter(t => t === first).length >= 3) {
+        const f = tiles[0];
+        // 刻子
+        if (tiles.filter(t => t === f).length >= 3) {
             const next = [...tiles]; next.splice(0, 3);
-            if (checkMeldsRecursive(next)) return true;
+            if (checkRecursive(next)) return true;
         }
-        if (!first.endsWith('z')) {
-            const num = parseInt(first), suit = first.slice(-1);
-            const t2 = (num + 1) + suit, t3 = (num + 2) + suit;
-            if (tiles.includes(t2) && tiles.includes(t3)) {
+        // 順子
+        if (!f.endsWith('z')) {
+            const n = parseInt(f), s = f.slice(-1);
+            if (tiles.includes((n+1)+s) && tiles.includes((n+2)+s)) {
                 const next = [...tiles];
-                next.splice(next.indexOf(first), 1);
-                next.splice(next.indexOf(t2), 1);
-                next.splice(next.indexOf(t3), 1);
-                if (checkMeldsRecursive(next)) return true;
+                next.splice(next.indexOf(f), 1);
+                next.splice(next.indexOf((n+1)+s), 1);
+                next.splice(next.indexOf((n+2)+s), 1);
+                if (checkRecursive(next)) return true;
             }
         }
         return false;
     };
 
     const handleWin = () => {
-        let all = [...playerHand]; if(playerDrawTile) all.push(playerDrawTile);
+        // 修正點：若非自摸，必須將對手最後一張牌納入判定
+        let all = [...playerHand];
+        let isZiMo = false;
+        if (playerDrawTile) {
+            all.push(playerDrawTile);
+            isZiMo = true;
+        } else if (discards.length > 0) {
+            all.push(discards[discards.length - 1]);
+        }
+
         if (canWin(all)) {
-            const isZiMo = !!playerDrawTile;
-            const report = getTaiReport(all, playerMelds, isZiMo);
-            const winAmount = BASE_MONEY + (report.total * TAI_MONEY);
-            totalGold += winAmount;
-            
-            let message = `${isZiMo ? '自摸' : '胡牌'}！\n\n`;
-            report.items.forEach(item => { message += `${item.name}：${item.count} 台\n`; });
-            message += `----------------\n總計：${report.total} 台\n`;
-            message += `計算：${BASE_MONEY} (底) + ${report.total}x${TAI_MONEY} (台)\n`;
-            message += `獲得：${winAmount.toLocaleString()} 金圓`;
-            
-            alert(message);
-            init();
+            const rep = getTaiReport(isZiMo);
+            const win = BASE_MONEY + (rep.total * TAI_MONEY);
+            totalGold += win;
+            let msg = `${isZiMo?'自摸':'胡牌'}！\n\n`;
+            rep.items.forEach(i => msg += `${i.name}：${i.count}台\n`);
+            msg += `----------------\n總計：${rep.total}台\n獲得：${win.toLocaleString()}金圓`;
+            alert(msg); init();
         } else {
-            const penalty = 30000; totalGold -= penalty;
-            alert(`炸胡！扣除白六金圓：${penalty.toLocaleString()}`);
-            render();
+            totalGold -= 30000;
+            alert("炸胡！判定失敗，扣除 30,000 金圓"); render();
         }
     };
 
-    return { init, userAction, modeToggle, handleWin };
+    return { init, userAction, handleWin, modeToggle: (m) => {} };
 })();
 window.onload = game.init;
 </script>
