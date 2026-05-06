@@ -68,7 +68,7 @@ const game = (() => {
     const svgBase = `https://raw.githubusercontent.com/kuochili-ops/mahjong_graphic/main/${encodeURIComponent("Vectors 矢量图")}/SVG/`;
     let deck = [], playerHand = [], playerMelds = [], cpuHand = [], cpuMelds = [], discards = [];
     let lastDiscardIdx = -1, playerDrawTile = null, currentMode = null, selectedIndices = [];
-    let isWaitingForDiscard = false; // 是否在吃碰槓後等待出牌
+    let isWaitingForDiscard = false;
     let totalBalance = parseInt(localStorage.getItem('white6_gold')) || 1000000;
 
     const sortTiles = (h) => h.sort((a,b) => {
@@ -86,19 +86,70 @@ const game = (() => {
         playerDrawTile = null; currentMode = null; selectedIndices = []; lastDiscardIdx = -1;
         isWaitingForDiscard = false;
         document.getElementById('totalGold').innerText = `持有金圓：${totalBalance.toLocaleString()}`;
-        updateStatus("𓃥 白六台灣麻將 準備就緒");
         render();
     };
 
-    const updateStatus = (msg) => document.getElementById('status').innerText = msg;
+    // 核心判定邏輯：16張麻將胡牌演算法
+    const checkWin = (hand) => {
+        if (hand.length % 3 !== 2) return false;
+        const counts = {};
+        hand.forEach(t => counts[t] = (counts[t] || 0) + 1);
+        
+        const tiles = Object.keys(counts).sort();
+        for (let t of tiles) {
+            if (counts[t] >= 2) {
+                const copy = {...counts};
+                copy[t] -= 2;
+                if (canSplit(copy)) return true;
+            }
+        }
+        return false;
+    };
+
+    const canSplit = (counts) => {
+        const tiles = Object.keys(counts).filter(k => counts[k] > 0).sort();
+        if (tiles.length === 0) return true;
+        
+        const t = tiles[0];
+        // 刻子
+        if (counts[t] >= 3) {
+            counts[t] -= 3;
+            if (canSplit(counts)) return true;
+            counts[t] += 3;
+        }
+        // 順子 (排除字牌z)
+        if (t.includes('m') || t.includes('p') || t.includes('s')) {
+            const n = parseInt(t[0]);
+            const suit = t[1];
+            const t2 = (n+1) + suit, t3 = (n+2) + suit;
+            if (counts[t2] > 0 && counts[t3] > 0) {
+                counts[t]--; counts[t2]--; counts[t3]--;
+                if (canSplit(counts)) return true;
+                counts[t]++; counts[t2]++; counts[t3]++;
+            }
+        }
+        return false;
+    };
+
+    const handleWin = () => {
+        const all = [...playerHand]; if(playerDrawTile) all.push(playerDrawTile);
+        if (checkWin(all)) {
+            const win = 100000 + (3 * 20000);
+            totalBalance += win;
+            localStorage.setItem('white6_gold', totalBalance);
+            alert(`𓃥 恭喜胡牌！贏得 ${win.toLocaleString()} 金圓`);
+            init();
+        } else {
+            alert("尚未符合胡牌牌型，不能詐胡喔！");
+        }
+    };
 
     const render = () => {
         const dp = document.getElementById('discardPile');
         dp.innerHTML = discards.map((t, i) => `<img class="discard-tile ${i === lastDiscardIdx ? 'taken' : ''}" src="${svgBase}${t}.svg">`).join('');
         document.getElementById('cpuMelds').innerHTML = cpuMelds.map(g => `<div class="meld-group">${g.map(t => `<div class="meld-tile"><img src="${svgBase}${t}.svg"></div>`).join('')}</div>`).join('');
         document.getElementById('playerMelds').innerHTML = playerMelds.map(g => `<div class="meld-group">${g.map(t => `<div class="meld-tile"><img src="${svgBase}${t}.svg"></div>`).join('')}</div>`).join('');
-        const pt = document.getElementById('playerTiles');
-        pt.innerHTML = '';
+        const pt = document.getElementById('playerTiles'); pt.innerHTML = '';
         let all = [...playerHand]; if(playerDrawTile) all.push(playerDrawTile);
         all.forEach((t, i) => {
             const div = document.createElement('div');
@@ -114,85 +165,36 @@ const game = (() => {
         document.getElementById('cpuTiles').innerHTML = Array(cpuHand.length).fill('<div class="cpu-tile"></div>').join('');
     };
 
-    const cpuTurn = () => {
-        updateStatus("對方摸牌中...");
-        setTimeout(() => {
-            if(deck.length === 0) return alert("流局");
-            cpuHand.push(deck.pop());
-            const disc = cpuHand.splice(Math.floor(Math.random()*cpuHand.length), 1)[0];
-            discards.push(disc);
-            lastDiscardIdx = -1;
-            updateStatus(`對方打出 ${disc}`);
-            render();
-        }, 1000);
+    const userDraw = () => {
+        if(selectedIndices.length === 1) {
+            let all = [...playerHand]; if(playerDrawTile) all.push(playerDrawTile);
+            discards.push(all.splice(selectedIndices[0], 1)[0]);
+            playerHand = sortTiles(all); playerDrawTile = null; selectedIndices = [];
+            isWaitingForDiscard = false; lastDiscardIdx = -1;
+            setTimeout(() => { cpuHand.push(deck.pop()); discards.push(cpuHand.splice(0,1)[0]); render(); }, 800);
+        } else if(!playerDrawTile && !isWaitingForDiscard) {
+            playerDrawTile = deck.pop(); render();
+        }
+    };
+
+    const modeSelect = (m) => {
+        if(isWaitingForDiscard) return;
+        if(currentMode === m) execute(m); else { currentMode = m; render(); }
     };
 
     const execute = (type) => {
         let all = [...playerHand]; if(playerDrawTile) all.push(playerDrawTile);
         const lastD = discards[discards.length - 1];
         let valid = false, group = [];
-
-        if(type === 'peng' && selectedIndices.length === 2 && all[selectedIndices[0]] === lastD) {
-            group = [lastD, lastD, lastD]; valid = true;
-        } else if(type === 'chi' && selectedIndices.length === 2) {
-            const s = sortTiles(selectedIndices.map(i => all[i]));
-            group = [s[0], lastD, s[1]]; valid = true;
-        } else if(type === 'gang') {
-            if(selectedIndices.length === 3 && all[selectedIndices[0]] === lastD) {
-                group = [lastD, lastD, lastD, lastD]; valid = true;
-            } else if(selectedIndices.length === 4 && all[selectedIndices[0]] === all[selectedIndices[1]]) {
-                group = [all[selectedIndices[0]], all[selectedIndices[0]], all[selectedIndices[0]], all[selectedIndices[0]]]; valid = true;
-            }
+        if(type === 'peng' && selectedIndices.length === 2 && all[selectedIndices[0]] === lastD) { group = [lastD, lastD, lastD]; valid = true; }
+        else if(type === 'chi' && selectedIndices.length === 2) { 
+            const s = sortTiles(selectedIndices.map(i => all[i])); group = [s[0], lastD, s[1]]; valid = true; 
         }
-
         if(valid) {
-            lastDiscardIdx = discards.length - 1;
             playerMelds.push(group);
             selectedIndices.sort((a,b)=>b-a).forEach(i => all.splice(i, 1));
-            playerHand = sortTiles(all);
-            playerDrawTile = null; selectedIndices = []; currentMode = null;
-            
-            if(type === 'gang') {
-                updateStatus("槓牌補花！請摸一張牌");
-                isWaitingForDiscard = false; // 槓完要先摸牌
-            } else {
-                updateStatus("動作完成！請選一張牌打出");
-                isWaitingForDiscard = true; 
-            }
-            render();
+            playerHand = sortTiles(all); playerDrawTile = null; selectedIndices = []; currentMode = null; isWaitingForDiscard = true; render();
         }
-    };
-
-    const userDraw = () => {
-        if(selectedIndices.length === 1) {
-            // 出牌邏輯
-            let all = [...playerHand]; if(playerDrawTile) all.push(playerDrawTile);
-            const disc = all.splice(selectedIndices[0], 1)[0];
-            discards.push(disc);
-            playerHand = sortTiles(all); playerDrawTile = null; selectedIndices = [];
-            isWaitingForDiscard = false;
-            lastDiscardIdx = -1;
-            cpuTurn();
-        } else if(!playerDrawTile && !isWaitingForDiscard) {
-            // 摸牌邏輯
-            if(deck.length === 0) return alert("流局");
-            playerDrawTile = deck.pop();
-            updateStatus("已摸牌，請選一張牌打出");
-            render();
-        }
-    };
-
-    const modeSelect = (m) => {
-        if(isWaitingForDiscard) return; // 已執行吃碰動作，必須先打牌
-        if(currentMode === m) execute(m); else { currentMode = m; render(); }
-    };
-
-    const handleWin = () => {
-        const win = 100000 + (3 * 20000);
-        totalBalance += win;
-        localStorage.setItem('white6_gold', totalBalance);
-        alert(`𓃥 胡牌！贏得 ${win.toLocaleString()} 金圓`);
-        init();
     };
 
     return { init, userDraw, handleWin, modeSelect };
