@@ -8,53 +8,39 @@
         :root { --bg-table: #2e7d32; --gold: #ffd700; --tile-w: 32px; }
         body { background-color: var(--bg-table); margin: 0; display: flex; flex-direction: column; align-items: center; height: 100dvh; font-family: sans-serif; color: white; overflow: hidden; padding-bottom: env(safe-area-inset-bottom); }
         .status-bar { background: rgba(0,0,0,0.8); padding: 4px 15px; border-radius: 20px; font-size: 0.8rem; border: 1px solid var(--gold); margin-top: 10px; }
-        
-        /* 對手副露區 */
         .opp-area { width: 100%; display: flex; justify-content: center; padding: 5px 0; min-height: 40px; background: rgba(0,0,0,0.1); }
         .meld-group { display: flex; gap: 1px; background: rgba(255,255,255,0.1); padding: 2px; border-radius: 3px; border: 1px solid rgba(255,255,255,0.3); }
         .meld-tile-sm { width: 22px; }
-
         .mahjong-area { flex: 1; display: flex; flex-direction: column; justify-content: space-between; width: 100%; max-width: 500px; padding: 5px; box-sizing: border-box; }
         .discard-area { background: rgba(0,0,0,0.2); border-radius: 10px; flex: 1; margin: 5px; display: grid; grid-template-columns: repeat(9, 1fr); grid-auto-rows: 32px; gap: 4px; padding: 8px; overflow-y: auto; }
         .discard-tile { width: 24px; margin: 0 auto; }
         .discard-tile.last { border: 2px solid var(--gold); box-shadow: 0 0 5px var(--gold); }
-
-        /* 手牌區滾動優化 */
-        .hand-scroll-container { width: 100%; overflow-x: auto; padding: 10px 0; -webkit-overflow-scrolling: touch; scroll-behavior: smooth; }
+        .hand-scroll-container { width: 100%; overflow-x: auto; padding: 10px 0; scroll-behavior: smooth; }
         .hand-row { display: inline-flex; align-items: flex-end; min-height: 60px; gap: 3px; padding: 0 20px; }
         .meld-zone { display: flex; gap: 5px; margin-right: 8px; border-right: 1px solid rgba(255,255,255,0.3); }
-        
         .tile { width: var(--tile-w); cursor: pointer; transition: transform 0.1s; }
         .tile img { width: 100%; border-radius: 3px; display: block; }
         .tile.selected { transform: translateY(-12px); outline: 2px solid var(--gold); }
         .draw-gap { margin-left: 15px; position: relative; }
         .draw-gap::before { content: ""; position: absolute; left: -8px; top: 10%; height: 80%; width: 1px; background: rgba(255,255,255,0.3); }
-
         .action-bar { display: flex; justify-content: center; gap: 6px; margin-bottom: 8px; width: 95%; }
         .btn { padding: 10px 0; background: #e0e0e0; border: none; border-radius: 6px; font-weight: bold; flex: 1; color: #333; font-size: 0.9rem; }
         .btn.active-mode { background: var(--gold) !important; }
-        
         .control-panel { width: 100%; display: flex; justify-content: center; padding: 10px 0 30px 0; background: rgba(0,0,0,0.2); }
-        .btn-main { width: 90%; height: 50px; background: #fff; color: #d32f2f; font-size: 1.2rem; border: none; border-radius: 8px; font-weight: bold; }
+        .btn-main { width: 90%; height: 50px; background: #fff; color: #d32f2f; font-size: 1.2rem; border: none; border-radius: 8px; font-weight: bold; box-shadow: 0 4px 0 #bbb; }
     </style>
 </head>
 <body>
 <div class="status-bar">𓃥 白六台灣麻將 | <span id="totalGold">1,800,000</span> 金圓</div>
-
-<div class="opp-area">
-    <div id="oppMelds" style="display:flex; gap:8px;"></div>
-</div>
-
+<div class="opp-area"><div id="oppMelds" style="display:flex; gap:8px;"></div></div>
 <div class="mahjong-area">
     <div id="discardPile" class="discard-area"></div>
-    
     <div class="action-bar">
         <button id="btn-chi" class="btn" onclick="game.modeToggle('chi')">吃</button>
         <button id="btn-peng" class="btn" onclick="game.modeToggle('peng')">碰</button>
         <button id="btn-gang" class="btn" onclick="game.modeToggle('gang')">槓</button>
         <button id="btn-win" class="btn" style="background:var(--gold)" onclick="game.handleWin()">胡</button>
     </div>
-
     <div id="scrollContainer" class="hand-scroll-container">
         <div class="hand-row">
             <div id="playerMelds" class="meld-zone"></div>
@@ -62,7 +48,6 @@
         </div>
     </div>
 </div>
-
 <div class="control-panel">
     <button id="btn-main-action" class="btn-main" onclick="game.userAction()">摸牌</button>
 </div>
@@ -70,12 +55,11 @@
 <script>
 const game = (() => {
     const svgBase = `https://raw.githubusercontent.com/kuochili-ops/mahjong_graphic/main/${encodeURIComponent("Vectors 矢量图")}/SVG/`;
-    let deck = [], playerHand = [], playerMelds = [], oppMelds = [], discards = [];
+    let deck = [], playerHand = [], playerMelds = [], oppHand = [], oppMelds = [], discards = [];
     let playerDrawTile = null, selectedIndices = [], activeMode = null;
-    let isWaitingForDiscard = false;
-    let totalGold = 1800000;
+    let isWaitingForDiscard = false, totalGold = 1800000;
 
-    const sortTiles = (h) => h.sort((a,b) => {
+    const sortTiles = (h) => [...h].sort((a,b) => {
         const order = {m:0, p:100, s:200, z:300};
         return (parseInt(a) + order[a.slice(-1)]) - (parseInt(b) + order[b.slice(-1)]);
     });
@@ -86,14 +70,13 @@ const game = (() => {
         for(let i=1;i<=7;i++) for(let j=0;j<4;j++) deck.push(`${i}z`); 
         for(let i=deck.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [deck[i],deck[j]]=[deck[j],deck[i]]; }
         playerHand = sortTiles(deck.splice(0,16)); 
+        oppHand = deck.splice(0,16); 
         playerDrawTile = null; isWaitingForDiscard = false; selectedIndices = []; activeMode = null;
         render();
     };
 
     const render = () => {
-        // 對手副露渲染
         document.getElementById('oppMelds').innerHTML = oppMelds.map(g => `<div class="meld-group">${g.map(t=>`<img class="meld-tile-sm" src="${svgBase}${t}.svg">`).join('')}</div>`).join('');
-        
         const pt = document.getElementById('playerTiles'); pt.innerHTML = '';
         playerHand.forEach((t, i) => {
             const div = document.createElement('div');
@@ -101,7 +84,6 @@ const game = (() => {
             div.innerHTML = `<img src="${svgBase}${t}.svg">`; 
             div.onclick = () => toggleSelect(i); pt.appendChild(div);
         });
-
         if(playerDrawTile) {
             const idx = playerHand.length;
             const div = document.createElement('div');
@@ -109,7 +91,6 @@ const game = (() => {
             div.innerHTML = `<img src="${svgBase}${playerDrawTile}.svg">`; 
             div.onclick = () => toggleSelect(idx); pt.appendChild(div);
         }
-
         document.getElementById('playerMelds').innerHTML = playerMelds.map(g => `<div class="meld-group">${g.map(t=>`<img class="meld-tile-sm" src="${svgBase}${t}.svg">`).join('')}</div>`).join('');
         document.getElementById('discardPile').innerHTML = discards.map((t,idx) => `<img class="discard-tile ${idx===discards.length-1?'last':''}" src="${svgBase}${t}.svg">`).join('');
         document.getElementById('totalGold').innerText = totalGold.toLocaleString();
@@ -118,9 +99,6 @@ const game = (() => {
         if (activeMode) mainBtn.innerText = "確認組合";
         else if (isWaitingForDiscard || playerDrawTile) mainBtn.innerText = "選擇放牌";
         else mainBtn.innerText = "摸牌";
-
-        document.querySelectorAll('.btn').forEach(b => b.classList.remove('active-mode'));
-        if(activeMode) document.getElementById(`btn-${activeMode}`).classList.add('active-mode');
     };
 
     const toggleSelect = (i) => {
@@ -138,63 +116,48 @@ const game = (() => {
             const target = (activeMode === 'gang') ? 3 : 2;
             if (selectedIndices.length !== target) return;
             const lastD = discards.pop();
+            const picked = selectedIndices.map(idx => (idx === playerHand.length) ? playerDrawTile : playerHand[idx]);
             playerHand = playerHand.filter((_, idx) => !selectedIndices.includes(idx));
-            if (activeMode === 'gang') {
-                playerMelds.push([lastD, lastD, lastD, lastD]);
-                playerDrawTile = deck.pop(); 
-            } else {
-                playerMelds.push([lastD, lastD, lastD]);
-                isWaitingForDiscard = true;
-            }
-            activeMode = null; selectedIndices = []; render(); 
-            scrollToEnd(); // 動作後滾動
-            return;
+            if (activeMode === 'gang') { playerMelds.push([lastD, ...picked, lastD]); playerDrawTile = deck.pop(); }
+            else { playerMelds.push(sortTiles([lastD, ...picked])); isWaitingForDiscard = true; }
+            activeMode = null; selectedIndices = []; render(); scrollToEnd(); return;
         }
-
-        if (!playerDrawTile && !isWaitingForDiscard) {
-            playerDrawTile = deck.pop(); 
-            render();
-            scrollToEnd(); // 摸牌後滾動
-            return;
-        }
-
+        if (!playerDrawTile && !isWaitingForDiscard) { playerDrawTile = deck.pop(); render(); scrollToEnd(); return; }
         if (selectedIndices.length === 1) {
             let all = [...playerHand]; if(playerDrawTile) all.push(playerDrawTile);
-            discards.push(all.splice(selectedIndices[0], 1)[0]);
-            playerHand = sortTiles(all); playerDrawTile = null; selectedIndices = [];
-            isWaitingForDiscard = false; render();
-            // 簡單模擬電腦
-            setTimeout(() => { 
-                if(Math.random() < 0.1) oppMelds.push(['1z','1z','1z']); // 模擬對手碰
-                discards.push(deck.pop()); 
-                render(); 
-            }, 600);
+            const discardedTile = all.splice(selectedIndices[0], 1)[0];
+            discards.push(discardedTile);
+            playerHand = sortTiles(all); playerDrawTile = null; selectedIndices = []; isWaitingForDiscard = false;
+            render();
+            setTimeout(() => opponentTurn(discardedTile), 600);
         }
+    };
+
+    const opponentTurn = (lastDiscard) => {
+        // 簡單對手 AI：嘗試碰或直接摸牌
+        const count = oppHand.filter(t => t === lastDiscard).length;
+        if (count >= 2) {
+            discards.pop();
+            oppMelds.push([lastDiscard, lastDiscard, lastDiscard]);
+            oppHand = oppHand.filter(t => t !== lastDiscard);
+        } else {
+            oppHand.push(deck.pop());
+        }
+        discards.push(oppHand.splice(Math.floor(Math.random()*oppHand.length), 1)[0]);
+        render();
     };
 
     const scrollToEnd = () => {
         const container = document.getElementById('scrollContainer');
-        setTimeout(() => { container.scrollLeft = container.scrollWidth; }, 100);
+        setTimeout(() => { container.scrollLeft = container.scrollWidth; }, 50);
     };
 
     const handleWin = () => {
-        let all = [...playerHand]; 
-        if (playerDrawTile) all.push(playerDrawTile);
-        else if (discards.length > 0) all.push(discards[discards.length-1]);
-        
-        // 模擬詳細結算顯示
-        let taiDetails = [
-            { name: "底", tai: 1 },
-            { name: playerDrawTile ? "自摸" : "榮和", tai: 1 },
-            { name: playerMelds.length === 0 ? "門清" : "平胡", tai: 1 }
-        ];
-        let totalTai = taiDetails.reduce((sum, item) => sum + item.tai, 0);
-        let winAmount = 5000 + (totalTai * 2000);
-        
-        let msg = `胡牌結算：\n` + taiDetails.map(d => `${d.name}: ${d.tai} 台`).join('\n') + `\n\n共 ${totalTai} 台，贏得 ${winAmount.toLocaleString()} 金圓`;
-        alert(msg);
-        totalGold += winAmount;
-        init();
+        // 台數結算逻辑
+        const items = [{n:"底", t:1}, {n:"門清", t:1}, {n:"自摸", t:1}];
+        const totalTai = items.reduce((a, b) => a + b.t, 0);
+        alert(`胡牌結算：\n${items.map(i=>`${i.n}: ${i.t}台`).join('\n')}\n總計: ${totalTai}台`);
+        totalGold += 10000; init();
     };
 
     const modeToggle = (m) => { activeMode = (activeMode === m) ? null : m; selectedIndices = []; render(); };
