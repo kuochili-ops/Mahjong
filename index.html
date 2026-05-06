@@ -15,7 +15,6 @@
         .discard-area { background: rgba(0,0,0,0.2); border-radius: 10px; flex: 1; margin: 5px; display: grid; grid-template-columns: repeat(9, 1fr); grid-auto-rows: 32px; gap: 4px; padding: 8px; overflow-y: auto; }
         .discard-tile { width: 24px; margin: 0 auto; }
         .discard-tile.last { border: 2px solid var(--gold); box-shadow: 0 0 5px var(--gold); }
-        .hand-scroll-container { width: 100%; overflow-x: auto; padding: 10px 0; }
         .hand-row { display: inline-flex; align-items: flex-end; min-height: 60px; gap: 3px; padding: 0 10px; }
         .meld-zone { display: flex; gap: 5px; margin-right: 8px; border-right: 1px solid rgba(255,255,255,0.3); }
         .tile { width: var(--tile-w); cursor: pointer; transition: transform 0.1s; }
@@ -28,7 +27,6 @@
         .btn.active-mode { background: var(--gold) !important; box-shadow: inset 0 2px 4px rgba(0,0,0,0.3); }
         .control-panel { width: 100%; display: flex; justify-content: center; padding: 10px 0 30px 0; background: rgba(0,0,0,0.2); }
         .btn-main { width: 90%; height: 50px; background: #fff; color: #d32f2f; font-size: 1.2rem; border: none; border-radius: 8px; font-weight: bold; box-shadow: 0 4px 0 #bbb; }
-        .btn-main:active { transform: translateY(2px); box-shadow: 0 2px 0 #bbb; }
     </style>
 </head>
 <body>
@@ -42,7 +40,7 @@
         <button id="btn-gang" class="btn" onclick="game.modeToggle('gang')">槓</button>
         <button id="btn-win" class="btn" style="background:var(--gold)" onclick="game.handleWin()">胡</button>
     </div>
-    <div id="scrollContainer" class="hand-scroll-container">
+    <div style="width: 100%; overflow-x: auto;">
         <div class="hand-row">
             <div id="playerMelds" class="meld-zone"></div>
             <div id="playerTiles" style="display:flex; gap:3px;"></div>
@@ -58,7 +56,7 @@ const game = (() => {
     const svgBase = `https://raw.githubusercontent.com/kuochili-ops/mahjong_graphic/main/${encodeURIComponent("Vectors 矢量图")}/SVG/`;
     let deck = [], playerHand = [], playerMelds = [], oppMelds = [], discards = [];
     let playerDrawTile = null, selectedIndices = [], activeMode = null;
-    let isWaitingForDiscard = false; 
+    let isWaitingForDiscard = false;
     let totalGold = 1800000;
 
     const sortTiles = (h) => h.sort((a,b) => {
@@ -107,85 +105,105 @@ const game = (() => {
         document.getElementById('discardPile').innerHTML = discards.map((t,idx) => `<img class="discard-tile ${idx===discards.length-1?'last':''}" src="${svgBase}${t}.svg">`).join('');
         document.getElementById('totalGold').innerText = totalGold.toLocaleString();
         
-        // 更新按鈕文字
         const mainBtn = document.getElementById('btn-main-action');
-        if (activeMode) {
-            mainBtn.innerText = "確認組合";
-        } else if (isWaitingForDiscard || playerDrawTile) {
-            mainBtn.innerText = "選擇放牌";
-        } else {
-            mainBtn.innerText = "摸牌";
-        }
+        if (activeMode) mainBtn.innerText = "確認組合";
+        else if (isWaitingForDiscard || playerDrawTile) mainBtn.innerText = "選擇放牌";
+        else mainBtn.innerText = "摸牌";
 
         document.querySelectorAll('.btn').forEach(b => b.classList.remove('active-mode'));
         if(activeMode) document.getElementById(`btn-${activeMode}`).classList.add('active-mode');
     };
 
-    const modeToggle = (m) => { 
-        if (isWaitingForDiscard || playerDrawTile) return; // 出牌期間禁止切換模式
-        activeMode = (activeMode === m) ? null : m; 
-        selectedIndices = []; 
-        render(); 
-    };
-
+    const modeToggle = (m) => { if (isWaitingForDiscard || playerDrawTile) return; activeMode = (activeMode === m) ? null : m; selectedIndices = []; render(); };
     const toggleSelect = (i) => {
         if(activeMode) {
-            const targetCount = (activeMode === 'gang') ? 3 : 2;
+            const target = (activeMode === 'gang') ? 3 : 2;
             const pos = selectedIndices.indexOf(i);
             if(pos > -1) selectedIndices.splice(pos, 1);
-            else if(selectedIndices.length < targetCount) selectedIndices.push(i);
-        } else { 
-            selectedIndices = [i]; 
-        }
+            else if(selectedIndices.length < target) selectedIndices.push(i);
+        } else { selectedIndices = [i]; }
         render();
     };
 
     const userAction = () => {
-        // 模式 1: 確認吃/碰/槓組合
         if (activeMode) {
-            const targetCount = (activeMode === 'gang') ? 3 : 2;
-            if (selectedIndices.length !== targetCount) { alert(`請選擇 ${targetCount} 張牌`); return; }
-
+            const target = (activeMode === 'gang') ? 3 : 2;
+            if (selectedIndices.length !== target) return;
             const lastD = discards.pop();
-            const picked = selectedIndices.map(idx => playerHand[idx]);
-            // 移除手牌中選中的牌
+            const picked = selectedIndices.map(idx => (idx === playerHand.length) ? playerDrawTile : playerHand[idx]);
             playerHand = playerHand.filter((_, idx) => !selectedIndices.includes(idx));
-            
             if (activeMode === 'gang') {
                 playerMelds.push([lastD, ...picked, lastD]);
-                playerDrawTile = deck.pop(); // 槓後補牌
-                isWaitingForDiscard = false; // 補牌後視為摸牌狀態，會走下面的出牌邏輯
+                playerDrawTile = deck.pop(); 
             } else {
                 playerMelds.push(sortTiles([lastD, ...picked]));
-                isWaitingForDiscard = true; 
+                isWaitingForDiscard = true;
             }
             activeMode = null; selectedIndices = []; render(); return;
         }
 
-        // 模式 2: 摸牌
         if (!playerDrawTile && !isWaitingForDiscard) {
-            playerDrawTile = deck.pop(); render();
-            setTimeout(() => document.getElementById('scrollContainer').scrollLeft = 999, 100);
-            return;
+            playerDrawTile = deck.pop(); render(); return;
         }
 
-        // 模式 3: 出牌 (放牌)
         if (selectedIndices.length === 1) {
             let all = [...playerHand]; if(playerDrawTile) all.push(playerDrawTile);
             discards.push(all.splice(selectedIndices[0], 1)[0]);
             playerHand = sortTiles(all); playerDrawTile = null; selectedIndices = [];
-            isWaitingForDiscard = false;
-            render(); 
-            // 模擬電腦隨機出牌
+            isWaitingForDiscard = false; render();
             setTimeout(() => { discards.push(deck.pop()); render(); }, 600);
-        } else {
-            alert("請先選擇一張要打出的牌");
         }
     };
 
-    const handleWin = () => { /* 延用之前的胡牌邏輯判定 */ alert("胡牌判定中..."); };
+    // 高精確胡牌演算法 (五副一對)
+    const canWin = (tiles) => {
+        if (tiles.length % 3 !== 2) return false;
+        const counts = {}; tiles.forEach(t => counts[t] = (counts[t] || 0) + 1);
+        for (let eye in counts) {
+            if (counts[eye] >= 2) {
+                const rem = [...tiles];
+                rem.splice(rem.indexOf(eye), 1); rem.splice(rem.indexOf(eye), 1);
+                if (checkSets(rem)) return true;
+            }
+        }
+        return false;
+    };
 
-    return { init, userAction, modeToggle };
+    const checkSets = (tiles) => {
+        if (tiles.length === 0) return true;
+        tiles.sort((a,b) => (parseInt(a)+({m:0,p:100,s:200,z:300}[a.slice(-1)])) - (parseInt(b)+({m:0,p:100,s:200,z:300}[b.slice(-1)])));
+        const f = tiles[0];
+        // 刻子
+        if (tiles.filter(t => t === f).length >= 3) {
+            const next = [...tiles]; next.splice(0, 3);
+            if (checkSets(next)) return true;
+        }
+        // 順子
+        if (!f.endsWith('z')) {
+            const n = parseInt(f), s = f.slice(-1);
+            const t2 = (n+1)+s, t3 = (n+2)+s;
+            if (tiles.includes(t2) && tiles.includes(t3)) {
+                const next = [...tiles];
+                next.splice(next.indexOf(f), 1); next.splice(next.indexOf(t2), 1); next.splice(next.indexOf(t3), 1);
+                if (checkSets(next)) return true;
+            }
+        }
+        return false;
+    };
+
+    const handleWin = () => {
+        let all = [...playerHand]; 
+        if (playerDrawTile) all.push(playerDrawTile);
+        else if (discards.length > 0) all.push(discards[discards.length-1]);
+        
+        if (canWin(all)) {
+            totalGold += 50000; alert("恭喜胡牌！獲得 50,000 金圓"); init();
+        } else {
+            totalGold -= 10000; alert("尚未聽牌或組合錯誤！扣除 10,000 金圓"); render();
+        }
+    };
+
+    return { init, userAction, modeToggle, handleWin };
 })();
 window.onload = game.init;
 </script>
