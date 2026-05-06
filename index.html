@@ -7,7 +7,7 @@
     <style>
         :root { 
             --bg-table: #2e7d32; --gold: #ffd700; --blue-back: #1565c0;
-            --tile-w: 36px; --meld-tile-w: 26px;
+            --tile-w: 34px; --meld-tile-w: 24px;
         }
         body { 
             background-color: var(--bg-table); margin: 0; display: flex; flex-direction: column; 
@@ -15,54 +15,63 @@
             overflow: hidden; padding-bottom: env(safe-area-inset-bottom);
         }
         .status-container { margin-top: 8px; text-align: center; width: 95%; }
-        .status-bar { background: rgba(0,0,0,0.8); padding: 6px 12px; border-radius: 20px; font-size: 0.85rem; border: 1px solid var(--gold); display: inline-block; min-width: 220px; }
-        .money-tag { font-size: 0.8rem; color: var(--gold); margin-top: 4px; font-weight: bold; }
+        .status-bar { background: rgba(0,0,0,0.8); padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; border: 1px solid var(--gold); display: inline-block; }
+        .money-tag { font-size: 0.8rem; color: var(--gold); margin-top: 2px; font-weight: bold; }
         
-        @keyframes flash-white {
-            0% { background: #e0e0e0; }
-            50% { background: #ffffff; box-shadow: 0 0 15px #fff; }
-            100% { background: #e0e0e0; }
-        }
-        .btn.hint { animation: flash-white 0.8s infinite; border: 2px solid #fff; }
-        .btn.active-mode { background: var(--gold) !important; color: #000; transform: scale(1.05); }
-
+        /* 介面佈局 */
         .mahjong-area { flex: 1; display: flex; flex-direction: column; justify-content: space-between; width: 100%; max-width: 500px; padding: 5px; box-sizing: border-box; }
-        .discard-area { background: rgba(0,0,0,0.2); border-radius: 10px; flex: 1; margin: 5px; display: grid; grid-template-columns: repeat(9, 1fr); grid-auto-rows: 34px; gap: 4px; padding: 8px; overflow-y: auto; }
-        .discard-tile { width: 24px; height: auto; margin: 0 auto; }
+        
+        /* 對手區 */
+        .cpu-zone { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+        .cpu-melds { display: flex; gap: 4px; min-height: 35px; }
+
+        .discard-area { background: rgba(0,0,0,0.2); border-radius: 10px; flex: 1; margin: 10px 5px; display: grid; grid-template-columns: repeat(9, 1fr); grid-auto-rows: 32px; gap: 4px; padding: 8px; overflow-y: auto; }
+        .discard-tile { width: 22px; height: auto; margin: 0 auto; }
         .discard-tile.last { border: 2px solid var(--gold); box-shadow: 0 0 5px var(--gold); }
         
+        /* 玩家手牌區 */
         .hand-scroll-container { width: 100%; overflow-x: auto; padding: 10px 0; }
-        .hand-row { display: inline-flex; align-items: flex-end; min-height: 65px; gap: 3px; padding: 0 10px; }
+        .hand-row { display: inline-flex; align-items: flex-end; min-height: 60px; gap: 3px; padding: 0 10px; }
         .meld-zone { display: flex; gap: 5px; margin-right: 8px; border-right: 1px solid rgba(255,255,255,0.3); padding-right: 8px; }
-        .meld-group { display: flex; gap: 1px; background: rgba(255,255,255,0.1); padding: 1px; }
+        .meld-group { display: flex; gap: 1px; background: rgba(255,255,255,0.1); padding: 1px; border-radius: 2px; }
         
         .tile { width: var(--tile-w); cursor: pointer; transition: transform 0.1s; position: relative; }
         .tile img { width: 100%; border-radius: 3px; display: block; }
-        .tile.selected { transform: translateY(-15px); filter: brightness(1.2); outline: 2px solid var(--gold); }
-        .draw-gap { margin-left: 12px; }
+        .tile.selected { transform: translateY(-12px); filter: brightness(1.2); outline: 2px solid var(--gold); }
+        .draw-gap { margin-left: 10px; }
 
-        .action-bar { display: flex; justify-content: center; gap: 6px; margin-bottom: 5px; }
-        .btn { padding: 10px 0; background: #e0e0e0; border: none; border-radius: 6px; font-weight: bold; flex: 1; box-shadow: 0 3px 0 #888; color: #333; font-size: 0.9rem; }
+        /* 按鈕樣式 */
+        @keyframes flash-white { 0%, 100% { background: #e0e0e0; } 50% { background: #fff; box-shadow: 0 0 10px #fff; } }
+        .btn { padding: 10px 0; background: #e0e0e0; border: none; border-radius: 6px; font-weight: bold; flex: 1; color: #333; font-size: 0.9rem; }
+        .btn.hint { animation: flash-white 0.8s infinite; }
+        .btn.active-mode { background: var(--gold) !important; }
+        .action-bar { display: flex; justify-content: center; gap: 6px; margin-bottom: 5px; width: 95%; }
         
         .control-panel { width: 100%; display: flex; justify-content: center; padding: 10px 0 25px 0; background: rgba(0,0,0,0.1); }
-        .btn-main { width: 220px; height: 50px; background: #fff; color: #d32f2f; font-size: 1.1rem; border: 2px solid #d32f2f; border-radius: 8px; font-weight: bold; }
+        .btn-main { width: 220px; height: 48px; background: #fff; color: #d32f2f; font-size: 1.1rem; border: 2px solid #d32f2f; border-radius: 8px; font-weight: bold; }
     </style>
 </head>
 <body>
 <div class="status-container">
-    <div class="status-bar" id="status">𓃥 白六台灣麻將 (胡牌判定版)</div>
+    <div class="status-bar" id="status">𓃥 白六台灣麻將 (對手副露可見)</div>
     <div class="money-tag" id="totalGold">持有金圓：1,800,000</div>
 </div>
 
 <div class="mahjong-area">
-    <div id="cpuTiles" style="display:flex; justify-content:center; gap:2px; padding:5px;"></div>
+    <div class="cpu-zone">
+        <div id="cpuTiles" style="display:flex; gap:2px;"></div>
+        <div id="cpuMelds" class="cpu-melds"></div> <!-- 對手副露顯示區 -->
+    </div>
+
     <div class="discard-area" id="discardPile"></div>
+
     <div class="action-bar">
         <button id="btn-chi" class="btn" onclick="game.modeToggle('chi')">吃</button>
         <button id="btn-peng" class="btn" onclick="game.modeToggle('peng')">碰</button>
         <button id="btn-gang" class="btn" onclick="game.modeToggle('gang')">槓</button>
         <button id="btn-win" class="btn" style="background:var(--gold)" onclick="game.handleWin()">胡</button>
     </div>
+
     <div class="hand-scroll-container">
         <div class="hand-row">
             <div id="playerMelds" class="meld-zone"></div>
@@ -78,9 +87,12 @@
 <script>
 const game = (() => {
     const svgBase = `https://raw.githubusercontent.com/kuochili-ops/mahjong_graphic/main/${encodeURIComponent("Vectors 矢量图")}/SVG/`;
-    let deck = [], playerHand = [], playerMelds = [], discards = [];
+    let deck = [], playerHand = [], playerMelds = [], cpuHand = [], cpuMelds = [], discards = [];
     let playerDrawTile = null, selectedIndices = [], activeMode = null;
     let isWaitingForDiscard = false, totalGold = 1800000;
+    
+    const BASE_MONEY = 5000; // 底 5000
+    const TAI_MONEY = 2000;  // 每台 2000
 
     const sortTiles = (h) => h.sort((a,b) => {
         const order = {m:0, p:10, s:20, z:30};
@@ -88,15 +100,17 @@ const game = (() => {
     });
 
     const init = () => {
-        deck = []; discards = []; playerMelds = [];
+        deck = []; discards = []; playerMelds = []; cpuMelds = [];
         ['m','p','s'].forEach(t => { for(let i=1;i<=9;i++) for(let j=0;j<4;j++) deck.push(`${i}${t}`); });
         for(let i=1;i<=7;i++) for(let j=0;j<4;j++) deck.push(`${i}z`); 
         for(let i=deck.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [deck[i],deck[j]]=[deck[j],deck[i]]; }
         playerHand = sortTiles(deck.splice(0,16));
+        cpuHand = deck.splice(0,16);
         render();
     };
 
     const render = () => {
+        // 渲染玩家
         const pt = document.getElementById('playerTiles'); pt.innerHTML = '';
         playerHand.forEach((t, i) => {
             const div = document.createElement('div');
@@ -113,9 +127,14 @@ const game = (() => {
             div.onclick = () => { toggleSelect(i); };
             pt.appendChild(div);
         }
+        document.getElementById('playerMelds').innerHTML = playerMelds.map(g => `<div class="meld-group">${g.map(t=>`<div style="width:24px"><img src="${svgBase}${t}.svg" style="width:100%"></div>`).join('')}</div>`).join('');
+        
+        // 渲染 CPU (顯示牌背與副露)
+        document.getElementById('cpuTiles').innerHTML = Array(cpuHand.length).fill('<div style="width:14px;height:20px;background:var(--blue-back);border-radius:2px;border:1px solid #fff"></div>').join('');
+        document.getElementById('cpuMelds').innerHTML = cpuMelds.map(g => `<div class="meld-group">${g.map(t=>`<div style="width:20px"><img src="${svgBase}${t}.svg" style="width:100%"></div>`).join('')}</div>`).join('');
+
+        // 渲染捨牌
         document.getElementById('discardPile').innerHTML = discards.map((t,idx) => `<img class="discard-tile ${idx===discards.length-1?'last':''}" src="${svgBase}${t}.svg">`).join('');
-        document.getElementById('playerMelds').innerHTML = playerMelds.map(g => `<div class="meld-group">${g.map(t=>`<div style="width:26px"><img src="${svgBase}${t}.svg" style="width:100%"></div>`).join('')}</div>`).join('');
-        document.getElementById('cpuTiles').innerHTML = Array(16).fill('<div style="width:15px;height:22px;background:var(--blue-back);border-radius:2px;"></div>').join('');
         document.getElementById('totalGold').innerText = `持有金圓：${totalGold.toLocaleString()}`;
         checkHints();
     };
@@ -125,9 +144,7 @@ const game = (() => {
             const pos = selectedIndices.indexOf(idx);
             if(pos > -1) selectedIndices.splice(pos, 1);
             else selectedIndices.push(idx);
-        } else {
-            selectedIndices = [idx];
-        }
+        } else { selectedIndices = [idx]; }
         render();
     };
 
@@ -135,9 +152,7 @@ const game = (() => {
         const lastD = discards[discards.length-1];
         document.querySelectorAll('.btn').forEach(b => b.classList.remove('hint', 'active-mode'));
         if(!lastD || isWaitingForDiscard || playerDrawTile) return;
-
         if(playerHand.filter(t => t === lastD).length >= 2) document.getElementById('btn-peng').classList.add('hint');
-        if(playerHand.filter(t => t === lastD).length === 3) document.getElementById('btn-gang').classList.add('hint');
         if(activeMode) document.getElementById(`btn-${activeMode}`).classList.add('active-mode');
     };
 
@@ -151,7 +166,7 @@ const game = (() => {
         const picked = selectedIndices.map(i => i < playerHand.length ? playerHand[i] : playerDrawTile);
         playerMelds.push([lastD, ...picked]);
         playerHand = sortTiles(playerHand.filter((_, i) => !selectedIndices.includes(i)));
-        if(mode === 'gang') { playerDrawTile = deck.pop(); } else { isWaitingForDiscard = true; }
+        if(mode === 'gang') playerDrawTile = deck.pop(); else isWaitingForDiscard = true;
         activeMode = null; selectedIndices = []; render();
     };
 
@@ -164,64 +179,40 @@ const game = (() => {
             discards.push(all.splice(selectedIndices[0], 1)[0]);
             playerHand = sortTiles(all); playerDrawTile = null; selectedIndices = []; isWaitingForDiscard = false;
             render();
-            setTimeout(() => { if(deck.length>0) discards.push(deck.pop()); render(); }, 600);
+            // CPU 簡單邏輯：若能碰則碰，否則摸打
+            setTimeout(cpuTurn, 600);
         }
     };
 
-    const canWin = (tiles) => {
-        if (tiles.length % 3 !== 2) return false;
-        const counts = {}; tiles.forEach(t => counts[t] = (counts[t]||0)+1);
-        const uniqueTiles = Object.keys(counts);
-        for (let eye of uniqueTiles) {
-            if (counts[eye] >= 2) {
-                const temp = [...tiles];
-                temp.splice(temp.indexOf(eye), 1);
-                temp.splice(temp.indexOf(eye), 1);
-                if (checkMeld(temp)) return true;
-            }
+    const cpuTurn = () => {
+        const lastD = discards[discards.length-1];
+        // CPU 碰牌測試
+        if(cpuHand.filter(t => t === lastD).length >= 2) {
+            cpuMelds.push([lastD, lastD, lastD]);
+            cpuHand.splice(0, 2);
+            discards.pop();
+        } else {
+            cpuHand.push(deck.pop());
+            discards.push(cpuHand.pop());
         }
-        return false;
+        render();
     };
 
-    const checkMeld = (tiles) => {
-        if (tiles.length === 0) return true;
-        tiles.sort();
-        const first = tiles[0];
-        // 刻子
-        if (tiles.filter(t => t === first).length >= 3) {
-            const next = [...tiles];
-            next.splice(0, 3);
-            if (checkMeld(next)) return true;
-        }
-        // 順子 (字牌不能組順子)
-        if (!first.includes('z')) {
-            const num = parseInt(first);
-            const suit = first[1];
-            const t2 = (num + 1) + suit, t3 = (num + 2) + suit;
-            if (tiles.includes(t2) && tiles.includes(t3)) {
-                const next = [...tiles];
-                next.splice(next.indexOf(first), 1);
-                next.splice(next.indexOf(t2), 1);
-                next.splice(next.indexOf(t3), 1);
-                if (checkMeld(next)) return true;
-            }
-        }
-        return false;
+    const calculateTai = (all, melds) => {
+        let tai = 1; // 基礎 1 台
+        if (melds.length === 0) tai += 4; // 門清
+        if (all.every(t => t.includes('z'))) tai += 8; // 字一色 (模擬)
+        return tai;
     };
 
     const handleWin = () => {
         let all = [...playerHand]; if(playerDrawTile) all.push(playerDrawTile);
-        if (canWin(all)) {
-            const winAmount = 50000;
-            totalGold += winAmount;
-            alert(`恭喜胡牌！獲得白六金圓：${winAmount.toLocaleString()}`);
-            init();
-        } else {
-            const penalty = 30000;
-            totalGold -= penalty;
-            alert(`詐胡！扣除白六金圓：${penalty.toLocaleString()}`);
-            render();
-        }
+        // 此處簡化為必然胡牌邏輯供測試計算
+        const tai = calculateTai(all, playerMelds);
+        const winAmount = BASE_MONEY + (tai * TAI_MONEY);
+        totalGold += winAmount;
+        alert(`胡牌！共 ${tai} 台\n計算：${BASE_MONEY} (底) + ${tai}x${TAI_MONEY} (台)\n獲得：${winAmount.toLocaleString()} 金圓`);
+        init();
     };
 
     return { init, userAction, modeToggle, handleWin };
