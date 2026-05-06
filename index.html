@@ -45,7 +45,7 @@
 </head>
 <body>
 <div class="status-container">
-    <div class="status-bar" id="status">𓃥 白六台灣麻將 (正式胡牌修正版)</div>
+    <div class="status-bar" id="status">𓃥 白六台灣麻將 (胡牌優化)</div>
     <div class="money-tag" id="totalGold">持有金圓：1,800,000</div>
 </div>
 
@@ -73,7 +73,7 @@ const game = (() => {
     const svgBase = `https://raw.githubusercontent.com/kuochili-ops/mahjong_graphic/main/${encodeURIComponent("Vectors 矢量图")}/SVG/`;
     let deck = [], playerHand = [], playerMelds = [], discards = [];
     let playerDrawTile = null, selectedIndices = [], activeMode = null;
-    let totalGold = 1779000;
+    let totalGold = 1800000;
     const BASE_MONEY = 5000, TAI_MONEY = 2000;
 
     const sortTiles = (h) => h.sort((a,b) => {
@@ -103,26 +103,27 @@ const game = (() => {
         document.getElementById('playerMelds').innerHTML = playerMelds.map(g => `<div class="meld-group">${g.map(t=>`<div style="width:24px"><img src="${svgBase}${t}.svg" style="width:100%"></div>`).join('')}</div>`).join('');
         document.getElementById('discardPile').innerHTML = discards.map((t,idx) => `<img class="discard-tile ${idx===discards.length-1?'last':''}" src="${svgBase}${t}.svg">`).join('');
         document.getElementById('totalGold').innerText = `持有金圓：${totalGold.toLocaleString()}`;
-        checkHints();
-    };
-
-    const toggleSelect = (idx) => {
-        if(activeMode) {
-            const pos = selectedIndices.indexOf(idx);
-            if(pos > -1) selectedIndices.splice(pos, 1); else selectedIndices.push(idx);
-        } else { selectedIndices = [idx]; }
-        render();
-    };
-
-    const checkHints = () => {
+        
+        // 清除閃爍狀態
+        document.querySelectorAll('.btn').forEach(b => b.classList.remove('hint', 'active-mode'));
         const lastD = discards[discards.length-1];
-        if(!lastD || playerDrawTile) return;
-        if(playerHand.filter(t => t === lastD).length >= 2) document.getElementById('btn-peng').classList.add('hint');
-        if(!lastD.endsWith('z')) {
-            const num = parseInt(lastD), suit = lastD.slice(-1);
-            const canChi = [[num-2, num-1], [num-1, num+1], [num+1, num+2]].some(p => p.every(n => playerHand.includes(n + suit)));
-            if(canChi) document.getElementById('btn-chi').classList.add('hint');
+        if(lastD && !playerDrawTile) {
+            // 碰槓偵測
+            if(playerHand.filter(t => t === lastD).length >= 2) document.getElementById('btn-peng').classList.add('hint');
+            // 吃偵測
+            if(!lastD.endsWith('z')) {
+                const n = parseInt(lastD), s = lastD.slice(-1);
+                if([[n-2, n-1], [n-1, n+1], [n+1, n+2]].some(p => p.every(v => playerHand.includes(v+s)))) document.getElementById('btn-chi').classList.add('hint');
+            }
         }
+    };
+
+    const toggleSelect = (i) => {
+        if(activeMode) {
+            const pos = selectedIndices.indexOf(i);
+            if(pos > -1) selectedIndices.splice(pos, 1); else selectedIndices.push(i);
+        } else { selectedIndices = [i]; }
+        render();
     };
 
     const userAction = () => {
@@ -136,12 +137,6 @@ const game = (() => {
             playerHand = sortTiles(all); playerDrawTile = null; selectedIndices = [];
             render(); setTimeout(() => { discards.push(deck.pop()); render(); }, 600);
         }
-    };
-
-    const getTaiReport = (isZiMo) => {
-        let res = { items: [{name: isZiMo?"自摸":"胡牌", count: 1}], total: 1 };
-        if (playerMelds.length === 0) { res.items.push({name:"門清", count: 1}); res.total += 1; }
-        return res;
     };
 
     const canWin = (tiles) => {
@@ -164,12 +159,10 @@ const game = (() => {
             return (parseInt(a) + order[a.slice(-1)]) - (parseInt(b) + order[b.slice(-1)]);
         });
         const f = tiles[0];
-        // 刻子
         if (tiles.filter(t => t === f).length >= 3) {
             const next = [...tiles]; next.splice(0, 3);
             if (checkRecursive(next)) return true;
         }
-        // 順子
         if (!f.endsWith('z')) {
             const n = parseInt(f), s = f.slice(-1);
             if (tiles.includes((n+1)+s) && tiles.includes((n+2)+s)) {
@@ -184,27 +177,24 @@ const game = (() => {
     };
 
     const handleWin = () => {
-        // 修正點：若非自摸，必須將對手最後一張牌納入判定
         let all = [...playerHand];
-        let isZiMo = false;
-        if (playerDrawTile) {
-            all.push(playerDrawTile);
-            isZiMo = true;
-        } else if (discards.length > 0) {
-            all.push(discards[discards.length - 1]);
-        }
+        let ziMo = false;
+        if (playerDrawTile) { all.push(playerDrawTile); ziMo = true; }
+        else if (discards.length > 0) { all.push(discards[discards.length-1]); }
 
         if (canWin(all)) {
-            const rep = getTaiReport(isZiMo);
-            const win = BASE_MONEY + (rep.total * TAI_MONEY);
+            let tai = 1;
+            let report = ziMo ? "自摸：1台\n" : "胡牌：1台\n";
+            if (playerMelds.length === 0) { report += "門清：1台\n"; tai += 1; }
+            if (ziMo) tai += 1;
+            
+            const win = BASE_MONEY + (tai * TAI_MONEY);
             totalGold += win;
-            let msg = `${isZiMo?'自摸':'胡牌'}！\n\n`;
-            rep.items.forEach(i => msg += `${i.name}：${i.count}台\n`);
-            msg += `----------------\n總計：${rep.total}台\n獲得：${win.toLocaleString()}金圓`;
-            alert(msg); init();
+            alert(`${ziMo?'自摸':'胡牌'}成功！\n\n${report}總計：${tai}台\n結算：${win.toLocaleString()}金圓`);
+            init();
         } else {
             totalGold -= 30000;
-            alert("炸胡！判定失敗，扣除 30,000 金圓"); render();
+            alert("炸胡！請確認手牌架構。"); render();
         }
     };
 
