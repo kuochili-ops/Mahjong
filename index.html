@@ -49,7 +49,7 @@
 </head>
 <body>
 <div class="status-container">
-    <div class="status-bar" id="status">𓃥 白六台灣麻將 (智慧偵測版)</div>
+    <div class="status-bar" id="status">𓃥 白六台灣麻將 (詳細計台版)</div>
     <div class="money-tag" id="totalGold">持有金圓：1,800,000</div>
 </div>
 
@@ -131,20 +131,12 @@ const game = (() => {
         document.querySelectorAll('.btn').forEach(b => b.classList.remove('hint', 'active-mode'));
         if(!lastD || isWaitingForDiscard || playerDrawTile) return;
 
-        // 偵測碰/槓
         if(playerHand.filter(t => t === lastD).length >= 2) document.getElementById('btn-peng').classList.add('hint');
-        if(playerHand.filter(t => t === lastD).length === 3) document.getElementById('btn-gang').classList.add('hint');
-        
-        // 偵測吃
         if(!lastD.endsWith('z')) {
             const num = parseInt(lastD), suit = lastD.slice(-1);
-            const patterns = [
-                [num-2, num-1], [num-1, num+1], [num+1, num+2]
-            ];
-            const canChi = patterns.some(p => p.every(n => playerHand.includes(n + suit)));
-            if(canChi) document.getElementById('btn-chi').classList.add('hint');
+            const patterns = [[num-2, num-1], [num-1, num+1], [num+1, num+2]];
+            if(patterns.some(p => p.every(n => playerHand.includes(n + suit)))) document.getElementById('btn-chi').classList.add('hint');
         }
-        
         if(activeMode) document.getElementById(`btn-${activeMode}`).classList.add('active-mode');
     };
 
@@ -164,9 +156,7 @@ const game = (() => {
 
     const userAction = () => {
         if (!playerDrawTile && !isWaitingForDiscard) {
-            playerDrawTile = deck.pop();
-            render();
-            // 自動捲動到最右側
+            playerDrawTile = deck.pop(); render();
             const container = document.getElementById('scrollContainer');
             setTimeout(() => { container.scrollLeft = container.scrollWidth; }, 100);
         } else if (selectedIndices.length === 1) {
@@ -183,6 +173,25 @@ const game = (() => {
             cpuMelds.push([lastD, lastD, lastD]); cpuHand.splice(0, 2); discards.pop();
         } else { cpuHand.push(deck.pop()); discards.push(cpuHand.pop()); }
         render();
+    };
+
+    // 詳細計台功能
+    const getTaiReport = (hand, melds, isZiMo) => {
+        let items = [];
+        let total = 0;
+
+        if (isZiMo) { items.push({name: "自摸", count: 1}); total += 1; }
+        if (melds.length === 0) { items.push({name: "門清", count: 1}); total += 1; }
+        
+        // 簡易判定字牌刻子
+        const allTiles = [...hand, ...melds.flat()];
+        const counts = {}; allTiles.forEach(t => counts[t] = (counts[t] || 0) + 1);
+        ['1z','2z','3z','4z'].forEach(z => { if(counts[z]>=3) { items.push({name: "風刻", count: 1}); total += 1; } });
+        ['5z','6z','7z'].forEach(z => { if(counts[z]>=3) { items.push({name: "箭刻", count: 2}); total += 2; } });
+
+        if (allTiles.every(t => t.endsWith('z'))) { items.push({name: "全字一色", count: 16}); total += 16; }
+        
+        return { items, total };
     };
 
     const canWin = (tiles) => {
@@ -224,21 +233,21 @@ const game = (() => {
         return false;
     };
 
-    const calculateTai = (hand, melds, isZiMo) => {
-        let tai = 1; // 基礎台
-        if (isZiMo) tai += 1; // 自摸加一台
-        if (melds.length === 0) tai += 8; // 門清自摸
-        return tai;
-    };
-
     const handleWin = () => {
         let all = [...playerHand]; if(playerDrawTile) all.push(playerDrawTile);
         if (canWin(all)) {
             const isZiMo = !!playerDrawTile;
-            const tai = calculateTai(all, playerMelds, isZiMo);
-            const winAmount = BASE_MONEY + (tai * TAI_MONEY);
+            const report = getTaiReport(all, playerMelds, isZiMo);
+            const winAmount = BASE_MONEY + (report.total * TAI_MONEY);
             totalGold += winAmount;
-            alert(`${isZiMo ? '自摸' : '胡牌'}！共 ${tai} 台\n計算：${BASE_MONEY} (底) + ${tai}x${TAI_MONEY} (台)\n獲得：${winAmount.toLocaleString()} 金圓`);
+            
+            let message = `${isZiMo ? '自摸' : '胡牌'}！\n\n`;
+            report.items.forEach(item => { message += `${item.name}：${item.count} 台\n`; });
+            message += `----------------\n總計：${report.total} 台\n`;
+            message += `計算：${BASE_MONEY} (底) + ${report.total}x${TAI_MONEY} (台)\n`;
+            message += `獲得：${winAmount.toLocaleString()} 金圓`;
+            
+            alert(message);
             init();
         } else {
             const penalty = 30000; totalGold -= penalty;
