@@ -80,16 +80,12 @@ const game = (() => {
     };
 
     const render = () => {
-        // 更新上方副露與按鈕狀態
         document.querySelectorAll('.btn').forEach(b => b.classList.remove('active-mode'));
         if(activeMode) {
             const btn = document.getElementById(`btn-${activeMode}`);
             if(btn) btn.classList.add('active-mode');
         }
-
         document.getElementById('oppMelds').innerHTML = oppMelds.map(g => `<div class="meld-group">${g.map(t=>`<img class="tile-sm" src="${svgBase}${t}.svg">`).join('')}</div>`).join('');
-        
-        // 渲染玩家手牌
         const pt = document.getElementById('playerTiles'); pt.innerHTML = '';
         playerHand.forEach((t, i) => {
             const div = document.createElement('div');
@@ -104,20 +100,14 @@ const game = (() => {
             div.innerHTML = `<img src="${svgBase}${playerDrawTile}.svg">`; 
             div.onclick = () => toggleSelect(idx); pt.appendChild(div);
         }
-
         document.getElementById('playerMelds').innerHTML = playerMelds.map(g => `<div class="meld-group">${g.map(t=>`<img class="tile-sm" src="${svgBase}${t}.svg">`).join('')}</div>`).join('');
         document.getElementById('discardPile').innerHTML = discards.map((t,idx) => `<img class="discard-tile ${idx===discards.length-1?'last':''}" src="${svgBase}${t}.svg">`).join('');
         document.getElementById('totalGold').innerText = totalGold.toLocaleString();
         
-        // --- 提示功能回復 ---
         const mainBtn = document.getElementById('btn-main-action');
-        if (activeMode) {
-            mainBtn.innerText = "確認組合";
-        } else if (isWaitingForDiscard || playerDrawTile) {
-            mainBtn.innerText = "選擇放牌";
-        } else {
-            mainBtn.innerText = "摸牌";
-        }
+        if (activeMode) mainBtn.innerText = "確認組合";
+        else if (isWaitingForDiscard || playerDrawTile) mainBtn.innerText = "選擇放牌";
+        else mainBtn.innerText = "摸牌";
     };
 
     const scrollToRight = () => {
@@ -125,32 +115,40 @@ const game = (() => {
         setTimeout(() => { sc.scrollLeft = sc.scrollWidth; }, 50);
     };
 
+    const calculateTai = (isSelfDraw) => {
+        let items = [{name: "底台", tai: 3}];
+        if (isSelfDraw) items.push({name: "自摸", tai: 1});
+        // 修正：只有在完全沒有副露組合的情況下，才是門清
+        if (playerMelds.length === 0) items.push({name: "門清", tai: 1});
+        
+        const total = items.reduce((sum, i) => sum + i.tai, 0);
+        return { items, total };
+    };
+
+    const handleWin = (isPlayer) => {
+        if (isPlayer) {
+            const res = calculateTai(!!playerDrawTile);
+            const winSum = res.total * 5000;
+            totalGold += winSum;
+            const listStr = res.items.map(i => `${i.name} ${i.tai}`).join('，');
+            alert(`胡牌結算：${listStr}。總計 ${res.total} 台。獲得 ${winSum.toLocaleString()} 金圓。`);
+            init();
+        }
+    };
+
     const userAction = () => {
-        // 1. 確認組合 (吃/碰/槓)
         if (activeMode) {
             const target = (activeMode === 'chi' || activeMode === 'peng') ? 2 : 3;
-            if (selectedIndices.length !== target) return alert(`請選擇 ${target} 張牌組成組合`);
-
+            if (selectedIndices.length !== target) return;
             const lastD = discards.pop();
             const picked = selectedIndices.map(idx => (idx === playerHand.length) ? playerDrawTile : playerHand[idx]);
             playerHand = playerHand.filter((_, idx) => !selectedIndices.includes(idx));
             playerMelds.push(sortTiles([...picked, lastD]));
-            
-            if (activeMode === 'gang') {
-                playerDrawTile = deck.pop(); 
-                scrollToRight();
-            } else {
-                isWaitingForDiscard = true; // 吃/碰後進入放牌狀態
-            }
+            if (activeMode === 'gang') { playerDrawTile = deck.pop(); scrollToRight(); }
+            else { isWaitingForDiscard = true; }
             activeMode = null; selectedIndices = []; render(); return;
         }
-
-        // 2. 摸牌
-        if (!playerDrawTile && !isWaitingForDiscard) { 
-            playerDrawTile = deck.pop(); render(); scrollToRight(); return; 
-        }
-
-        // 3. 選擇放牌
+        if (!playerDrawTile && !isWaitingForDiscard) { playerDrawTile = deck.pop(); render(); scrollToRight(); return; }
         if (selectedIndices.length === 1) {
             let all = [...playerHand]; if(playerDrawTile) all.push(playerDrawTile);
             const discarded = all.splice(selectedIndices[0], 1)[0];
@@ -161,14 +159,10 @@ const game = (() => {
     };
 
     const opponentTurn = (lastD) => {
-        // 對手簡易吃碰邏輯
         if (oppHand.filter(t => t === lastD).length >= 2) {
-            discards.pop();
-            oppMelds.push([lastD, lastD, lastD]);
+            discards.pop(); oppMelds.push([lastD, lastD, lastD]);
             oppHand = oppHand.filter(t => t !== lastD);
-        } else {
-            oppHand.push(deck.pop());
-        }
+        } else { oppHand.push(deck.pop()); }
         oppHand = sortTiles(oppHand);
         discards.push(oppHand.splice(Math.floor(Math.random()*oppHand.length), 1)[0]);
         render();
@@ -184,27 +178,7 @@ const game = (() => {
     };
 
     const modeToggle = (m) => { activeMode = (activeMode === m) ? null : m; selectedIndices = []; render(); };
-    
-    const handleGangLogic = () => {
-        if (playerDrawTile) {
-            for (let i = 0; i < playerMelds.length; i++) {
-                if (playerMelds[i].length === 3 && playerMelds[i][0] === playerDrawTile) {
-                    if (confirm(`執行 ${playerDrawTile} 加槓？`)) {
-                        playerMelds[i].push(playerDrawTile); playerDrawTile = deck.pop();
-                        render(); scrollToRight(); return;
-                    }
-                }
-            }
-        }
-        game.modeToggle('gang');
-    };
-
-    const handleWin = (isPlayer) => {
-        if (isPlayer) {
-            alert("結算：底台 3，門清 1，自摸 1。總計 5 台。獲得 25,000 金圓。");
-            totalGold += 25000; init();
-        }
-    };
+    const handleGangLogic = () => { game.modeToggle('gang'); };
 
     return { init, userAction, modeToggle, handleGangLogic, handleWin };
 })();
