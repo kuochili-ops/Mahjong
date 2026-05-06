@@ -14,33 +14,29 @@
         .tile-sm { width: 20px; border-radius: 2px; }
         .mahjong-area { flex: 1; display: flex; flex-direction: column; justify-content: space-between; width: 100%; max-width: 500px; padding: 5px; box-sizing: border-box; }
         
-        /* 海底區高度減少並支援捲動 */
-        .discard-area { 
-            background: rgba(0,0,0,0.2); 
-            border-radius: 10px; 
-            height: 120px; /* 固定高度 */
-            margin: 5px; 
-            display: grid; 
-            grid-template-columns: repeat(9, 1fr); 
-            grid-auto-rows: 32px; 
-            gap: 4px; 
-            padding: 8px; 
-            overflow-y: auto; /* 支援垂直捲動 */
-            border: 1px solid rgba(255,255,255,0.1);
-        }
-        
+        .discard-area { background: rgba(0,0,0,0.2); border-radius: 10px; height: 110px; margin: 5px; display: grid; grid-template-columns: repeat(9, 1fr); grid-auto-rows: 32px; gap: 4px; padding: 8px; overflow-y: auto; border: 1px solid rgba(255,255,255,0.1); }
         .discard-tile { width: 24px; margin: 0 auto; }
         .discard-tile.last { border: 2px solid var(--gold); box-shadow: 0 0 5px var(--gold); }
+        
         .hand-scroll-container { width: 100%; overflow-x: auto; padding: 10px 0; scroll-behavior: smooth; }
         .hand-row { display: inline-flex; align-items: flex-end; min-height: 60px; gap: 3px; padding: 0 20px; }
-        .meld-zone { display: flex; gap: 5px; margin-right: 8px; border-right: 1px solid rgba(255,255,255,0.3); }
+        
+        /* 副露區排在前方 */
+        .meld-zone { display: flex; gap: 5px; margin-right: 8px; }
+        
         .tile { width: var(--tile-w); cursor: pointer; transition: transform 0.1s; }
         .tile img { width: 100%; border-radius: 3px; display: block; }
         .tile.selected { transform: translateY(-12px); outline: 2px solid var(--gold); }
         .draw-gap { margin-left: 15px; }
+        
         .action-bar { display: flex; justify-content: center; gap: 6px; margin-bottom: 8px; width: 95%; }
         .btn { padding: 10px 0; background: #e0e0e0; border: none; border-radius: 6px; font-weight: bold; flex: 1; color: #333; font-size: 0.9rem; }
         .btn.active-mode { background: var(--gold) !important; color: #000; }
+        
+        /* 閃爍動畫 */
+        @keyframes hint-flash { 0% { background: #e0e0e0; } 50% { background: var(--gold); box-shadow: 0 0 10px var(--gold); } 100% { background: #e0e0e0; } }
+        .btn-hint { animation: hint-flash 1s infinite; }
+
         .control-panel { width: 100%; display: flex; justify-content: center; padding: 10px 0 30px 0; background: rgba(0,0,0,0.2); }
         .btn-main { width: 90%; height: 50px; background: #fff; color: #d32f2f; font-size: 1.2rem; border: none; border-radius: 8px; font-weight: bold; }
     </style>
@@ -99,16 +95,13 @@ const game = (() => {
         document.getElementById('deckCount').innerText = deck.length;
         document.getElementById('totalGold').innerText = totalGold.toLocaleString();
         
-        // 渲染海底並自動捲動到底部
+        // 更新海底區
         const dp = document.getElementById('discardPile');
         dp.innerHTML = discards.map((t,idx) => `<img class="discard-tile ${idx===discards.length-1?'last':''}" src="${svgBase}${t}.svg">`).join('');
         dp.scrollTop = dp.scrollHeight;
 
-        // 更新按鈕提示
-        const mainBtn = document.getElementById('btn-main-action');
-        if (activeMode) mainBtn.innerText = "確認組合";
-        else if (isWaitingForDiscard || playerDrawTile) mainBtn.innerText = "選擇放牌";
-        else mainBtn.innerText = "摸牌";
+        // 偵測是否可吃碰槓並顯示閃爍
+        updateHints();
 
         // 玩家手牌渲染
         const pt = document.getElementById('playerTiles'); pt.innerHTML = '';
@@ -125,32 +118,43 @@ const game = (() => {
             div.innerHTML = `<img src="${svgBase}${playerDrawTile}.svg">`; 
             div.onclick = () => toggleSelect(idx); pt.appendChild(div);
         }
+
+        // 副露區域置前
         document.getElementById('playerMelds').innerHTML = playerMelds.map(g => `<div class="meld-group">${g.map(t=>`<img class="tile-sm" src="${svgBase}${t}.svg">`).join('')}</div>`).join('');
         document.getElementById('oppMelds').innerHTML = oppMelds.map(g => `<div class="meld-group">${g.map(t=>`<img class="tile-sm" src="${svgBase}${t}.svg">`).join('')}</div>`).join('');
-    };
-
-    const handleWin = (isPlayer) => {
-        if (!isPlayer) return;
-        let items = [{name: "底台", tai: 3}];
-        if (playerDrawTile) items.push({name: "自摸", tai: 1});
-        if (playerMelds.length === 0) items.push({name: "門清", tai: 1});
         
-        const totalTai = items.reduce((s, i) => s + i.tai, 0);
-        const winAmount = totalTai * 5000;
-        totalGold += winAmount;
-
-        const resultText = items.map(i => `${i.name}：${i.tai} 台`).join('\n');
-        alert(`𓃥 胡牌結算清單：\n------------------\n${resultText}\n------------------\n總計：${totalTai} 台\n獲得金圓：${winAmount.toLocaleString()}`);
-        init();
+        const mainBtn = document.getElementById('btn-main-action');
+        if (activeMode) mainBtn.innerText = "確認組合";
+        else if (isWaitingForDiscard || playerDrawTile) mainBtn.innerText = "選擇放牌";
+        else mainBtn.innerText = "摸牌";
     };
 
-    const checkDeckOut = () => {
-        if (deck.length === 0) {
-            alert("海底牌已摸完，無人胡牌：臭局！");
-            init();
-            return true;
+    const updateHints = () => {
+        const lastD = discards[discards.length - 1];
+        const lastIsOpp = (discards.length > 0 && !playerDrawTile && !isWaitingForDiscard);
+        
+        document.querySelectorAll('.btn').forEach(b => b.classList.remove('btn-hint', 'active-mode'));
+        if(activeMode) document.getElementById(`btn-${activeMode}`).classList.add('active-mode');
+
+        if (lastIsOpp && lastD) {
+            const count = playerHand.filter(t => t === lastD).length;
+            if (count >= 2) document.getElementById('btn-peng').classList.add('btn-hint');
+            if (count === 3) document.getElementById('btn-gang').classList.add('btn-hint');
+            // 吃牌簡化偵測
+            const val = parseInt(lastD); const suit = lastD.slice(-1);
+            if(suit !== 'z') {
+                const has = (v) => playerHand.includes(`${v}${suit}`);
+                if((has(val-1) && has(val+1)) || (has(val-2) && has(val-1)) || (has(val+1) && has(val+2))) {
+                    document.getElementById('btn-chi').classList.add('btn-hint');
+                }
+            }
         }
-        return false;
+        // 暗槓偵測
+        if (playerDrawTile) {
+            const combined = [...playerHand, playerDrawTile];
+            const counts = {}; combined.forEach(t => counts[t] = (counts[t] || 0) + 1);
+            if (Object.values(counts).some(c => c === 4)) document.getElementById('btn-gang').classList.add('btn-hint');
+        }
     };
 
     const userAction = () => {
@@ -162,18 +166,16 @@ const game = (() => {
             playerHand = playerHand.filter((_, idx) => !selectedIndices.includes(idx));
             playerMelds.push(sortTiles([...picked, lastD]));
             if (activeMode === 'gang') { 
-                if (checkDeckOut()) return;
+                if(deck.length === 0) return alert("臭局");
                 playerDrawTile = deck.pop(); 
             } else { isWaitingForDiscard = true; }
             activeMode = null; selectedIndices = []; render(); return;
         }
 
         if (!playerDrawTile && !isWaitingForDiscard) { 
-            if (checkDeckOut()) return;
-            playerDrawTile = deck.pop(); 
-            render(); 
-            const sc = document.getElementById('scrollContainer');
-            setTimeout(() => sc.scrollLeft = sc.scrollWidth, 50);
+            if(deck.length === 0) return alert("臭局");
+            playerDrawTile = deck.pop(); render(); 
+            setTimeout(() => document.getElementById('scrollContainer').scrollLeft = 9999, 50);
             return; 
         }
 
@@ -182,23 +184,19 @@ const game = (() => {
             const discarded = all.splice(selectedIndices[0], 1)[0];
             playerHand = sortTiles(all); playerDrawTile = null; selectedIndices = []; isWaitingForDiscard = false;
             discards.push(discarded); render();
-            if (deck.length === 0) { setTimeout(() => { alert("最後一張牌打出無人胡牌：臭局！"); init(); }, 500); return; }
+            if (deck.length === 0) { setTimeout(() => { alert("臭局！"); init(); }, 500); return; }
             setTimeout(() => opponentTurn(discarded), 600);
         }
     };
 
     const opponentTurn = (lastD) => {
         if (oppHand.filter(t => t === lastD).length >= 2) {
-            discards.pop();
-            oppMelds.push([lastD, lastD, lastD]);
+            discards.pop(); oppMelds.push([lastD, lastD, lastD]);
             oppHand = oppHand.filter(t => t !== lastD);
-        } else {
-            if (deck.length > 0) oppHand.push(deck.pop());
-        }
+        } else { if(deck.length > 0) oppHand.push(deck.pop()); }
         oppHand = sortTiles(oppHand);
-        discards.push(oppHand.splice(Math.floor(Math.random() * oppHand.length), 1)[0]);
+        discards.push(oppHand.splice(Math.floor(Math.random()*oppHand.length), 1)[0]);
         render();
-        if (deck.length === 0) { setTimeout(() => { alert("對手打出最後一張牌：臭局！"); init(); }, 500); }
     };
 
     const toggleSelect = (i) => {
@@ -212,6 +210,7 @@ const game = (() => {
 
     const modeToggle = (m) => { activeMode = (activeMode === m) ? null : m; selectedIndices = []; render(); };
     const handleGangLogic = () => { game.modeToggle('gang'); };
+    const handleWin = (p) => { if(p) alert("結算完成"); init(); };
 
     return { init, userAction, modeToggle, handleGangLogic, handleWin };
 })();
