@@ -10,62 +10,49 @@
             --tile-w: 36px; --meld-tile-w: 28px;
         }
         body { background-color: var(--bg-table); margin: 0; display: flex; flex-direction: column; align-items: center; height: 100vh; font-family: sans-serif; color: white; overflow: hidden; }
-        
         .status-container { margin-top: 10px; text-align: center; width: 95%; }
         .status-bar { background: rgba(0,0,0,0.8); padding: 8px 15px; border-radius: 20px; font-size: 0.9rem; border: 1px solid var(--gold); display: inline-block; min-width: 220px; }
         .money-tag { font-size: 0.85rem; color: var(--gold); margin-top: 5px; font-weight: bold; }
-
         .mahjong-area { flex: 1; display: flex; flex-direction: column; justify-content: space-between; width: 100%; max-width: 500px; padding: 5px; box-sizing: border-box; }
-
         .hand-scroll-container { width: 100%; overflow-x: auto; padding: 15px 0; -webkit-overflow-scrolling: touch; }
         .hand-row { display: inline-flex; align-items: flex-end; min-height: 75px; gap: 4px; padding: 0 15px; min-width: max-content; }
-        
         .meld-zone { display: flex; gap: 8px; margin-right: 12px; border-right: 1px solid rgba(255,255,255,0.3); padding-right: 12px; }
         .meld-group { display: flex; gap: 1px; background: rgba(255,255,255,0.1); padding: 2px; border-radius: 3px; }
         .meld-tile { width: var(--meld-tile-w); }
         .meld-tile img { width: 100%; display: block; }
-
         .tile { width: var(--tile-w); cursor: pointer; transition: transform 0.1s; position: relative; }
         .tile img { width: 100%; display: block; border-radius: 3px; box-shadow: 1px 2px 4px rgba(0,0,0,0.3); }
         .tile.selected { transform: translateY(-18px); filter: brightness(1.2); }
         .draw-gap { margin-left: 15px; }
-
         .cpu-tile { width: 22px; height: 30px; background-color: var(--blue-back); border: 1px solid #ccc; border-radius: 2px; }
-
         .discard-area { background: rgba(0,0,0,0.2); border-radius: 10px; flex: 1; margin: 10px 5px; display: grid; grid-template-columns: repeat(9, 1fr); grid-auto-rows: 38px; gap: 5px; padding: 10px; overflow-y: auto; }
         .discard-tile { width: 26px; height: auto; margin: 0 auto; box-sizing: border-box; }
         .discard-tile.taken { border: 2px solid var(--red-frame); box-shadow: 0 0 5px var(--red-frame); }
-
         .action-bar { display: flex; justify-content: center; gap: 8px; margin: 5px; }
         .btn { padding: 12px 0; background: linear-gradient(to bottom, #fff, #e0e0e0); border: none; border-radius: 6px; font-weight: bold; font-size: 0.95rem; cursor: pointer; color: #111; flex: 1; box-shadow: 0 4px 0 #888; }
         .btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #888; }
         .btn.active-mode { background: var(--gold); color: #000; box-shadow: 0 4px 0 #b8860b; }
-
         .control-panel { width: 100%; display: flex; justify-content: center; padding-bottom: 25px; }
         .btn-main { width: 180px; background: #fff; color: #d32f2f; font-size: 1rem; border: 2px solid #d32f2f; }
     </style>
 </head>
 <body>
-
 <div class="status-container">
     <div class="status-bar" id="status">𓃥 白六台灣麻將</div>
     <div class="money-tag" id="totalGold">持有金圓：1,000,000</div>
 </div>
-
 <div class="mahjong-area">
     <div class="hand-row" style="min-height:40px; justify-content:center; min-width:auto;">
+        <div id="cpuMelds" class="meld-zone"></div>
         <div id="cpuTiles" style="display:flex; gap:2px;"></div>
     </div>
-
     <div class="discard-area" id="discardPile"></div>
-    
     <div class="action-bar">
         <button id="btn-chi" class="btn" onclick="game.modeSelect('chi')">吃牌</button>
         <button id="btn-peng" class="btn" onclick="game.modeSelect('peng')">碰</button>
         <button id="btn-gang" class="btn" onclick="game.modeSelect('gang')">槓</button>
         <button class="btn" onclick="game.handleWin()">胡</button>
     </div>
-
     <div class="hand-scroll-container">
         <div class="hand-row">
             <div id="playerMelds" class="meld-zone"></div>
@@ -73,22 +60,16 @@
         </div>
     </div>
 </div>
-
 <div class="control-panel">
     <button class="btn btn-main" onclick="game.userDraw()">摸牌 / 出牌</button>
 </div>
-
 <script>
 const game = (() => {
     const svgBase = `https://raw.githubusercontent.com/kuochili-ops/mahjong_graphic/main/${encodeURIComponent("Vectors 矢量图")}/SVG/`;
-    let deck = [], playerHand = [], playerMelds = [], discards = [];
+    let deck = [], playerHand = [], playerMelds = [], cpuHand = [], cpuMelds = [], discards = [];
     let lastDiscardIdx = -1, playerDrawTile = null, currentMode = null, selectedIndices = [];
+    let isWaitingForDiscard = false; // 是否在吃碰槓後等待出牌
     let totalBalance = parseInt(localStorage.getItem('white6_gold')) || 1000000;
-
-    const updateBalanceUI = () => {
-        document.getElementById('totalGold').innerText = `持有金圓：${totalBalance.toLocaleString()}`;
-        localStorage.setItem('white6_gold', totalBalance);
-    };
 
     const sortTiles = (h) => h.sort((a,b) => {
         const w = {m:0, p:10, s:20, z:30};
@@ -96,21 +77,26 @@ const game = (() => {
     });
 
     const init = () => {
-        deck = []; discards = []; playerMelds = [];
+        deck = []; discards = []; playerMelds = []; cpuMelds = [];
         ['m', 'p', 's'].forEach(t => { for(let i=1; i<=9; i++) for(let j=0; j<4; j++) deck.push(`${i}${t}`); });
         for(let i=1; i<=7; i++) for(let j=0; j<4; j++) deck.push(`${i}z`); 
         for(let i=deck.length-1; i>0; i--){ const j=Math.floor(Math.random()*(i+1)); [deck[i],deck[j]]=[deck[j],deck[i]]; }
-        
         playerHand = sortTiles(deck.splice(0, 16));
+        cpuHand = deck.splice(0, 16);
         playerDrawTile = null; currentMode = null; selectedIndices = []; lastDiscardIdx = -1;
-        updateBalanceUI();
+        isWaitingForDiscard = false;
+        document.getElementById('totalGold').innerText = `持有金圓：${totalBalance.toLocaleString()}`;
+        updateStatus("𓃥 白六台灣麻將 準備就緒");
         render();
     };
+
+    const updateStatus = (msg) => document.getElementById('status').innerText = msg;
 
     const render = () => {
         const dp = document.getElementById('discardPile');
         dp.innerHTML = discards.map((t, i) => `<img class="discard-tile ${i === lastDiscardIdx ? 'taken' : ''}" src="${svgBase}${t}.svg">`).join('');
-        document.getElementById('playerMelds').innerHTML = playerMelds.map(group => `<div class="meld-group">${group.map(t => `<div class="meld-tile"><img src="${svgBase}${t}.svg"></div>`).join('')}</div>`).join('');
+        document.getElementById('cpuMelds').innerHTML = cpuMelds.map(g => `<div class="meld-group">${g.map(t => `<div class="meld-tile"><img src="${svgBase}${t}.svg"></div>`).join('')}</div>`).join('');
+        document.getElementById('playerMelds').innerHTML = playerMelds.map(g => `<div class="meld-group">${g.map(t => `<div class="meld-tile"><img src="${svgBase}${t}.svg"></div>`).join('')}</div>`).join('');
         const pt = document.getElementById('playerTiles');
         pt.innerHTML = '';
         let all = [...playerHand]; if(playerDrawTile) all.push(playerDrawTile);
@@ -125,64 +111,92 @@ const game = (() => {
             };
             pt.appendChild(div);
         });
-        document.getElementById('cpuTiles').innerHTML = Array(16).fill('<div class="cpu-tile"></div>').join('');
-        ['chi', 'peng', 'gang'].forEach(m => document.getElementById(`btn-${m}`).classList.toggle('active-mode', currentMode === m));
+        document.getElementById('cpuTiles').innerHTML = Array(cpuHand.length).fill('<div class="cpu-tile"></div>').join('');
     };
 
-    const handleWin = () => {
-        // 簡易台數估計
-        let tai = 3; // 起胡基本台數
-        let details = ["起胡：3台"];
-        
-        // 判斷紅中
-        let allTiles = [...playerHand, ...playerMelds.flat()];
-        if(playerDrawTile) allTiles.push(playerDrawTile);
-        if(allTiles.filter(t => t === '5z').length >= 3) { tai += 1; details.push("紅中：1台"); }
-        
-        const winAmount = 100000 + (tai * 20000); // 底 100,000 / 每台 20,000
-        totalBalance += winAmount;
-        
-        alert(`𓃥 白六金圓 結算！\n\n${details.join('\n')}\n總計台數：${tai} 台\n本局贏得：${winAmount.toLocaleString()}\n\n目前總額：${totalBalance.toLocaleString()}`);
-        init();
+    const cpuTurn = () => {
+        updateStatus("對方摸牌中...");
+        setTimeout(() => {
+            if(deck.length === 0) return alert("流局");
+            cpuHand.push(deck.pop());
+            const disc = cpuHand.splice(Math.floor(Math.random()*cpuHand.length), 1)[0];
+            discards.push(disc);
+            lastDiscardIdx = -1;
+            updateStatus(`對方打出 ${disc}`);
+            render();
+        }, 1000);
     };
-
-    const modeSelect = (m) => { if(currentMode === m) execute(m); else { currentMode = m; render(); } };
 
     const execute = (type) => {
         let all = [...playerHand]; if(playerDrawTile) all.push(playerDrawTile);
         const lastD = discards[discards.length - 1];
         let valid = false, group = [];
 
-        if(type === 'peng' && selectedIndices.length === 2) {
+        if(type === 'peng' && selectedIndices.length === 2 && all[selectedIndices[0]] === lastD) {
             group = [lastD, lastD, lastD]; valid = true;
         } else if(type === 'chi' && selectedIndices.length === 2) {
             const s = sortTiles(selectedIndices.map(i => all[i]));
             group = [s[0], lastD, s[1]]; valid = true;
-        } else if(type === 'gang' && (selectedIndices.length === 3 || selectedIndices.length === 4)) {
-            group = Array(4).fill(selectedIndices.length === 3 ? lastD : all[selectedIndices[0]]); valid = true;
+        } else if(type === 'gang') {
+            if(selectedIndices.length === 3 && all[selectedIndices[0]] === lastD) {
+                group = [lastD, lastD, lastD, lastD]; valid = true;
+            } else if(selectedIndices.length === 4 && all[selectedIndices[0]] === all[selectedIndices[1]]) {
+                group = [all[selectedIndices[0]], all[selectedIndices[0]], all[selectedIndices[0]], all[selectedIndices[0]]]; valid = true;
+            }
         }
 
         if(valid) {
             lastDiscardIdx = discards.length - 1;
             playerMelds.push(group);
             selectedIndices.sort((a,b)=>b-a).forEach(i => all.splice(i, 1));
-            playerHand = sortTiles(all); playerDrawTile = null; selectedIndices = []; currentMode = null;
+            playerHand = sortTiles(all);
+            playerDrawTile = null; selectedIndices = []; currentMode = null;
+            
+            if(type === 'gang') {
+                updateStatus("槓牌補花！請摸一張牌");
+                isWaitingForDiscard = false; // 槓完要先摸牌
+            } else {
+                updateStatus("動作完成！請選一張牌打出");
+                isWaitingForDiscard = true; 
+            }
             render();
         }
     };
 
     const userDraw = () => {
         if(selectedIndices.length === 1) {
+            // 出牌邏輯
             let all = [...playerHand]; if(playerDrawTile) all.push(playerDrawTile);
-            discards.push(all.splice(selectedIndices[0], 1)[0]);
+            const disc = all.splice(selectedIndices[0], 1)[0];
+            discards.push(disc);
             playerHand = sortTiles(all); playerDrawTile = null; selectedIndices = [];
-            setTimeout(() => { discards.push(deck.pop()); render(); }, 500);
-        } else if(!playerDrawTile) { playerDrawTile = deck.pop(); render(); }
+            isWaitingForDiscard = false;
+            lastDiscardIdx = -1;
+            cpuTurn();
+        } else if(!playerDrawTile && !isWaitingForDiscard) {
+            // 摸牌邏輯
+            if(deck.length === 0) return alert("流局");
+            playerDrawTile = deck.pop();
+            updateStatus("已摸牌，請選一張牌打出");
+            render();
+        }
     };
 
-    return { init, modeSelect, userDraw, handleWin };
-})();
+    const modeSelect = (m) => {
+        if(isWaitingForDiscard) return; // 已執行吃碰動作，必須先打牌
+        if(currentMode === m) execute(m); else { currentMode = m; render(); }
+    };
 
+    const handleWin = () => {
+        const win = 100000 + (3 * 20000);
+        totalBalance += win;
+        localStorage.setItem('white6_gold', totalBalance);
+        alert(`𓃥 胡牌！贏得 ${win.toLocaleString()} 金圓`);
+        init();
+    };
+
+    return { init, userDraw, handleWin, modeSelect };
+})();
 window.onload = game.init;
 </script>
 </body>
