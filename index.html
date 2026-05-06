@@ -8,49 +8,65 @@
         :root { --bg-table: #2e7d32; --gold: #ffd700; --tile-w: 32px; }
         body { background-color: var(--bg-table); margin: 0; display: flex; flex-direction: column; align-items: center; height: 100dvh; font-family: sans-serif; color: white; overflow: hidden; padding-bottom: env(safe-area-inset-bottom); }
         .status-bar { background: rgba(0,0,0,0.8); padding: 5px 15px; border-radius: 20px; font-size: 0.8rem; border: 1px solid var(--gold); margin: 8px 0; z-index: 20; }
-        .opp-display-area { width: 100%; display: flex; flex-direction: column; align-items: center; min-height: 100px; padding: 5px 0; gap: 8px; }
+        
+        /* 對手空間：預留兩列，解決無空間顯示問題 */
+        .opp-zone { width: 100%; display: flex; flex-direction: column; align-items: center; padding: 10px 0; background: rgba(0,0,0,0.2); min-height: 100px; border-bottom: 1px solid rgba(255,255,255,0.1); }
         .opp-row { display: flex; gap: 4px; justify-content: center; min-height: 40px; width: 100%; }
-        .discard-area { flex: 1; width: 95%; max-width: 420px; background: rgba(0,0,0,0.1); border-radius: 12px; margin: 5px 0; display: grid; grid-template-columns: repeat(9, 1fr); grid-auto-rows: 28px; gap: 3px; padding: 10px; overflow-y: auto; }
-        .discard-tile { width: 22px; margin: 0 auto; }
+        
+        .discard-area { flex: 1; width: 95%; max-width: 420px; background: rgba(0,0,0,0.1); border-radius: 12px; margin: 5px 0; display: grid; grid-template-columns: repeat(9, 1fr); grid-auto-rows: 28px; gap: 3px; padding: 10px; overflow-y: auto; border: 1px solid rgba(255,255,255,0.05); }
+        .discard-tile { width: 22px; margin: 0 auto; opacity: 0.9; }
+        
         .action-bar { display: flex; justify-content: center; gap: 8px; margin-bottom: 10px; width: 90%; }
-        .btn { padding: 12px 0; background: #eee; border: none; border-radius: 8px; font-weight: bold; flex: 1; color: #333; font-size: 0.95rem; }
-        .player-zone { width: 100%; background: rgba(0,0,0,0.2); padding: 12px 0; position: relative; }
+        .btn { padding: 12px 0; background: #eee; border: none; border-radius: 8px; font-weight: bold; flex: 1; color: #333; font-size: 0.95rem; box-shadow: 0 3px 0 #bbb; }
+        .btn.active { background: var(--gold); box-shadow: 0 3px 0 #b8860b; }
+
+        .player-zone { width: 100%; background: rgba(0,0,0,0.2); padding: 12px 0; }
         .hand-scroll-container { width: 100%; overflow-x: auto; padding: 0 20px; scroll-behavior: smooth; }
         .hand-column { display: flex; flex-direction: column; gap: 12px; min-width: max-content; }
         .meld-zone { display: flex; gap: 10px; min-height: 35px; }
         .hand-row { display: flex; align-items: flex-end; min-height: 60px; gap: 3px; }
+        
         .tile { width: var(--tile-w); }
         .tile img { width: 100%; border-radius: 3px; display: block; box-shadow: 2px 2px 4px rgba(0,0,0,0.4); }
         .tile.selected img { outline: 3px solid var(--gold); transform: translateY(-12px); }
-        .draw-gap { margin-left: 15px; border-left: 1px dashed rgba(255,255,255,0.3); padding-left: 5px; }
+        
         .tile-sm { width: 24px; }
         .meld-group { display: flex; gap: 1px; background: rgba(255,255,255,0.1); padding: 3px; border-radius: 4px; }
+
         .control-panel { width: 100%; display: flex; justify-content: center; padding: 15px 0 40px 0; }
-        .btn-main { width: 90%; height: 55px; background: #fff; color: #d32f2f; font-size: 1.3rem; border: none; border-radius: 12px; font-weight: bold; }
+        .btn-main { width: 90%; height: 55px; background: #fff; color: #d32f2f; font-size: 1.3rem; border: none; border-radius: 12px; font-weight: bold; box-shadow: 0 4px 0 #bbb; }
     </style>
 </head>
 <body>
-<div class="status-bar">𓃥 白六 | <span id="totalGold">1,800,000</span> 金圓 | 剩餘: <span id="deckCount">0</span> 張</div>
-<div class="opp-display-area">
-    <div id="oppMelds" class="opp-row"></div>
-    <div id="oppWinHand" class="opp-row"></div>
+
+<div class="status-bar">
+    𓃥 白六 | <span id="totalGold">1,800,000</span> 金圓 | 剩餘: <span id="deckCount">0</span> 張
 </div>
+
+<div class="opp-zone">
+    <div id="oppMelds" class="opp-row"></div> <div id="oppWinHand" class="opp-row"></div> </div>
+
 <div id="discardPile" class="discard-area"></div>
+
 <div class="action-bar">
     <button class="btn" onclick="game.modeToggle('chi')">吃</button>
     <button class="btn" onclick="game.modeToggle('peng')">碰</button>
     <button class="btn" onclick="game.modeToggle('gang')">槓</button>
     <button class="btn" style="background:#ff9800; color:white;" onclick="game.handleWin(true)">胡</button>
 </div>
+
 <div class="player-zone">
-    <div id="scrollContainer" class="hand-scroll-container">
+    <div class="hand-scroll-container">
         <div class="hand-column">
             <div id="playerMelds" class="meld-zone"></div>
             <div id="playerTiles" class="hand-row"></div>
         </div>
     </div>
 </div>
-<div class="control-panel"><button id="btn-main-action" class="btn-main" onclick="game.userAction()">摸牌</button></div>
+
+<div class="control-panel">
+    <button id="btn-main-action" class="btn-main" onclick="game.userAction()">摸牌</button>
+</div>
 
 <script>
 const game = (() => {
@@ -75,11 +91,20 @@ const game = (() => {
 
     const render = (showOppWin = false) => {
         document.getElementById('deckCount').innerText = deck.length;
-        document.getElementById('oppMelds').innerHTML = oppMelds.map(g => `<div class="meld-group">${g.map(t=>`<img class="tile-sm" src="${svgBase}${t}.svg">`).join('')}</div>`).join('');
-        document.getElementById('oppWinHand').innerHTML = showOppWin ? oppHand.map(t => `<img class="tile-sm" src="${svgBase}${t}.svg">`).join('') : "";
-        document.getElementById('discardPile').innerHTML = discards.map(t => `<img class="discard-tile" src="${svgBase}${t}.svg">`).join('');
-        document.getElementById('playerMelds').innerHTML = playerMelds.map(g => `<div class="meld-group">${g.map(t=>`<img class="tile-sm" src="${svgBase}${t}.svg">`).join('')}</div>`).join('');
         
+        // 渲染對手吃碰槓 (始終顯示)
+        const om = document.getElementById('oppMelds');
+        om.innerHTML = oppMelds.map(g => `<div class="meld-group">${g.map(t=>`<img class="tile-sm" src="${svgBase}${t}.svg">`).join('')}</div>`).join('');
+        
+        // 渲染對手胡牌組合 (僅胡牌時顯示)
+        const owh = document.getElementById('oppWinHand');
+        owh.innerHTML = showOppWin ? oppHand.map(t => `<img class="tile-sm" src="${svgBase}${t}.svg">`).join('') : "";
+
+        const dp = document.getElementById('discardPile');
+        dp.innerHTML = discards.map(t => `<img class="discard-tile" src="${svgBase}${t}.svg">`).join('');
+        dp.scrollTop = dp.scrollHeight;
+
+        document.getElementById('playerMelds').innerHTML = playerMelds.map(g => `<div class="meld-group">${g.map(t=>`<img class="tile-sm" src="${svgBase}${t}.svg">`).join('')}</div>`).join('');
         const pt = document.getElementById('playerTiles'); pt.innerHTML = '';
         playerHand.forEach((t, i) => {
             const div = document.createElement('div');
@@ -94,30 +119,41 @@ const game = (() => {
             div.onclick = () => { selectedIndices = [16]; render(); };
             pt.appendChild(div);
         }
-        document.getElementById('btn-main-action').innerText = playerDrawTile ? "選擇放牌" : "摸牌";
     };
 
     const userAction = () => {
-        if (!playerDrawTile) { 
-            playerDrawTile = deck.pop(); 
-            render(); 
-            setTimeout(() => { document.getElementById('scrollContainer').scrollLeft = 9999; }, 50);
-            return; 
-        }
+        if (!playerDrawTile) { playerDrawTile = deck.pop(); render(); return; }
         if (selectedIndices.length === 1) {
             const idx = selectedIndices[0];
-            discards.push((idx === 16) ? playerDrawTile : playerHand.splice(idx, 1)[0]);
+            const discarded = (idx === 16) ? playerDrawTile : playerHand.splice(idx, 1)[0];
+            discards.push(discarded);
             playerHand = sortTiles(playerHand); playerDrawTile = null; selectedIndices = [];
             render();
-            // 強制啟動對手回合，剩牌數會變動
-            setTimeout(() => {
-                if(deck.length > 0) discards.push(deck.pop()); 
-                render();
-            }, 600);
+            // 模擬對手吃碰與隨機胡牌
+            setTimeout(() => { 
+                if(Math.random() < 0.1) { // 模擬對手碰牌
+                    oppMelds.push([discarded, discarded, discarded]);
+                    discards.pop();
+                }
+                // 為了測試，增加胡牌機率
+                if(Math.random() < 0.25) handleWin(false); 
+                else render();
+            }, 500);
         }
     };
 
-    return { init, userAction, handleWin: (p) => { render(!p); alert(p?"自摸!":"對手胡牌!"); init(); }, modeToggle: ()=>{} };
+    const handleWin = (isPlayer) => {
+        // --- 重點修正：渲染優先 ---
+        render(!isPlayer); // 立即執行 UI 渲染，展示對手牌組
+
+        // --- 重點修正：將 alert 異步延遲 ---
+        setTimeout(() => {
+            alert(isPlayer ? "恭喜自摸！獲得 25,000 金圓" : "對手胡牌！結算 5 台");
+            init(); // alert 關閉後再初始化新局
+        }, 500); // 延遲半秒，給 UI 渲染時間
+    };
+
+    return { init, userAction, handleWin, modeToggle: ()=>{} };
 })();
 window.onload = game.init;
 </script>
