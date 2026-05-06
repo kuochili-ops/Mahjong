@@ -32,11 +32,13 @@
         .tile { width: var(--tile-w); cursor: pointer; transition: transform 0.1s; position: relative; }
         .tile img { width: 100%; border-radius: 3px; display: block; }
         .tile.selected { transform: translateY(-12px); filter: brightness(1.2); outline: 2px solid var(--gold); }
+        .tile.disabled { opacity: 0.4; pointer-events: none; }
         .draw-gap { margin-left: 10px; }
 
         @keyframes flash-white { 0%, 100% { background: #e0e0e0; } 50% { background: #fff; box-shadow: 0 0 10px #fff; } }
         .btn { padding: 10px 0; background: #e0e0e0; border: none; border-radius: 6px; font-weight: bold; flex: 1; color: #333; font-size: 0.9rem; box-shadow: 0 3px 0 #888; }
         .btn.hint { animation: flash-white 0.8s infinite; }
+        .btn.active-mode { background: var(--gold) !important; color: #000; box-shadow: 0 3px 0 #b8860b; }
         .action-bar { display: flex; justify-content: center; gap: 6px; margin-bottom: 5px; width: 95%; }
         
         .control-panel { width: 100%; display: flex; justify-content: center; padding: 10px 0 25px 0; background: rgba(0,0,0,0.1); }
@@ -45,7 +47,7 @@
 </head>
 <body>
 <div class="status-container">
-    <div class="status-bar" id="status">𓃥 白六台灣麻將 (胡牌優化)</div>
+    <div class="status-bar" id="status">𓃥 白六台灣麻將 (操作最佳化)</div>
     <div class="money-tag" id="totalGold">持有金圓：1,800,000</div>
 </div>
 
@@ -65,7 +67,7 @@
     </div>
 </div>
 <div class="control-panel">
-    <button class="btn btn-main" onclick="game.userAction()">摸牌 / 出牌</button>
+    <button id="btn-main-action" class="btn btn-main" onclick="game.userAction()">摸牌 / 出牌</button>
 </div>
 
 <script>
@@ -89,44 +91,102 @@ const game = (() => {
         playerHand = sortTiles(deck.splice(0,16)); render();
     };
 
+    const getValidChiPairs = (lastD) => {
+        if (!lastD || lastD.endsWith('z')) return [];
+        const n = parseInt(lastD), s = lastD.slice(-1);
+        const patterns = [[n-2, n-1], [n-1, n+1], [n+1, n+2]];
+        return patterns.filter(p => p.every(v => v >= 1 && v <= 9 && playerHand.includes(v+s)));
+    };
+
     const render = () => {
         const pt = document.getElementById('playerTiles'); pt.innerHTML = '';
+        const lastD = discards[discards.length-1];
+        
         playerHand.forEach((t, i) => {
-            const div = document.createElement('div'); div.className = `tile ${selectedIndices.includes(i) ? 'selected' : ''}`;
-            div.innerHTML = `<img src="${svgBase}${t}.svg">`; div.onclick = () => toggleSelect(i); pt.appendChild(div);
+            const div = document.createElement('div');
+            let isDisabled = false;
+            
+            // 吃牌模式下的過濾邏輯
+            if (activeMode === 'chi') {
+                const pairs = getValidChiPairs(lastD);
+                const validTiles = new Set(pairs.flat().map(v => v + lastD.slice(-1)));
+                if (!validTiles.has(t)) isDisabled = true;
+            }
+            // 碰槓模式下的過濾邏輯
+            else if (activeMode === 'peng' || activeMode === 'gang') {
+                if (t !== lastD) isDisabled = true;
+            }
+
+            div.className = `tile ${selectedIndices.includes(i) ? 'selected' : ''} ${isDisabled ? 'disabled' : ''}`;
+            div.innerHTML = `<img src="${svgBase}${t}.svg">`; 
+            div.onclick = () => toggleSelect(i); pt.appendChild(div);
         });
+
         if(playerDrawTile) {
             const i = playerHand.length;
-            const div = document.createElement('div'); div.className = `tile draw-gap ${selectedIndices.includes(i) ? 'selected' : ''}`;
+            const div = document.createElement('div');
+            div.className = `tile draw-gap ${selectedIndices.includes(i) ? 'selected' : ''}`;
             div.innerHTML = `<img src="${svgBase}${playerDrawTile}.svg">`; div.onclick = () => toggleSelect(i); pt.appendChild(div);
         }
+
         document.getElementById('playerMelds').innerHTML = playerMelds.map(g => `<div class="meld-group">${g.map(t=>`<div style="width:24px"><img src="${svgBase}${t}.svg" style="width:100%"></div>`).join('')}</div>`).join('');
         document.getElementById('discardPile').innerHTML = discards.map((t,idx) => `<img class="discard-tile ${idx===discards.length-1?'last':''}" src="${svgBase}${t}.svg">`).join('');
         document.getElementById('totalGold').innerText = `持有金圓：${totalGold.toLocaleString()}`;
         
-        // 清除閃爍狀態
+        updateButtons(lastD);
+    };
+
+    const updateButtons = (lastD) => {
         document.querySelectorAll('.btn').forEach(b => b.classList.remove('hint', 'active-mode'));
-        const lastD = discards[discards.length-1];
-        if(lastD && !playerDrawTile) {
-            // 碰槓偵測
-            if(playerHand.filter(t => t === lastD).length >= 2) document.getElementById('btn-peng').classList.add('hint');
-            // 吃偵測
-            if(!lastD.endsWith('z')) {
-                const n = parseInt(lastD), s = lastD.slice(-1);
-                if([[n-2, n-1], [n-1, n+1], [n+1, n+2]].some(p => p.every(v => playerHand.includes(v+s)))) document.getElementById('btn-chi').classList.add('hint');
-            }
+        if(!lastD || playerDrawTile) return;
+
+        if(playerHand.filter(t => t === lastD).length >= 2) document.getElementById('btn-peng').classList.add('hint');
+        if(getValidChiPairs(lastD).length > 0) document.getElementById('btn-chi').classList.add('hint');
+        
+        if(activeMode) {
+            const btn = document.getElementById(`btn-${activeMode}`);
+            btn.classList.add('active-mode');
+            document.getElementById('btn-main-action').innerText = "確認組合";
+        } else {
+            document.getElementById('btn-main-action').innerText = playerDrawTile ? "出牌" : "摸牌";
         }
+    };
+
+    const modeToggle = (mode) => {
+        if(activeMode === mode) {
+            activeMode = null; selectedIndices = [];
+        } else {
+            activeMode = mode; selectedIndices = [];
+        }
+        render();
     };
 
     const toggleSelect = (i) => {
         if(activeMode) {
             const pos = selectedIndices.indexOf(i);
-            if(pos > -1) selectedIndices.splice(pos, 1); else selectedIndices.push(i);
-        } else { selectedIndices = [i]; }
+            if(pos > -1) selectedIndices.splice(pos, 1);
+            else if(selectedIndices.length < 2) selectedIndices.push(i);
+        } else {
+            selectedIndices = [i];
+        }
         render();
     };
 
     const userAction = () => {
+        if (activeMode) {
+            // 執行吃/碰/槓組合
+            if (selectedIndices.length === 2 || (activeMode === 'peng' && selectedIndices.length === 2)) {
+                const lastD = discards.pop();
+                const picked = selectedIndices.map(idx => playerHand[idx]);
+                playerMelds.push(sortTiles([lastD, ...picked]));
+                playerHand = sortTiles(playerHand.filter((_, idx) => !selectedIndices.includes(idx)));
+                activeMode = null; selectedIndices = []; render();
+            } else {
+                alert("請選擇正確的兩張牌組成順子或刻子");
+            }
+            return;
+        }
+
         if (!playerDrawTile) {
             playerDrawTile = deck.pop(); render();
             const sc = document.getElementById('scrollContainer');
@@ -183,22 +243,18 @@ const game = (() => {
         else if (discards.length > 0) { all.push(discards[discards.length-1]); }
 
         if (canWin(all)) {
-            let tai = 1;
-            let report = ziMo ? "自摸：1台\n" : "胡牌：1台\n";
-            if (playerMelds.length === 0) { report += "門清：1台\n"; tai += 1; }
-            if (ziMo) tai += 1;
-            
+            let tai = 1 + (ziMo ? 1 : 0) + (playerMelds.length === 0 ? 1 : 0);
             const win = BASE_MONEY + (tai * TAI_MONEY);
             totalGold += win;
-            alert(`${ziMo?'自摸':'胡牌'}成功！\n\n${report}總計：${tai}台\n結算：${win.toLocaleString()}金圓`);
+            alert(`${ziMo?'自摸':'胡牌'}成功！共計 ${tai} 台，獲得 ${win.toLocaleString()} 金圓`);
             init();
         } else {
             totalGold -= 30000;
-            alert("炸胡！請確認手牌架構。"); render();
+            alert("炸胡！扣除 30,000 金圓"); render();
         }
     };
 
-    return { init, userAction, handleWin, modeToggle: (m) => {} };
+    return { init, userAction, handleWin, modeToggle };
 })();
 window.onload = game.init;
 </script>
