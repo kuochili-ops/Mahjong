@@ -18,7 +18,6 @@
         .discard-tile { width: 24px; margin: 0 auto; }
         .discard-tile.last { border: 2px solid var(--gold); box-shadow: 0 0 8px var(--gold); }
 
-        /* 滑動容器優化 */
         .hand-scroll-view { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; scroll-behavior: smooth; padding: 15px 0; }
         .hand-container-inner { display: flex; align-items: flex-end; min-width: max-content; padding: 0 30px; gap: 3px; }
         
@@ -75,9 +74,12 @@ const game = (() => {
     let playerDrawTile = null, selectedIdx = null, totalGold = 1800000;
     let state = "draw"; 
 
+    // 改進的自動排序邏輯
     const sortTiles = (h) => [...h].sort((a,b) => {
         const order = {m:0, p:100, s:200, z:300};
-        return (parseInt(a) + order[a.slice(-1)]) - (parseInt(b) + order[b.slice(-1)]);
+        const va = parseInt(a) + order[a.slice(-1)];
+        const vb = parseInt(b) + order[b.slice(-1)];
+        return va - vb;
     });
 
     const isMahjong = (hand) => {
@@ -118,7 +120,9 @@ const game = (() => {
         ['m','p','s'].forEach(t => { for(let i=1;i<=9;i++) for(let j=0;j<4;j++) deck.push(`${i}${t}`); });
         for(let i=1;i<=7;i++) for(let j=0;j<4;j++) deck.push(`${i}z`); 
         for(let i=deck.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [deck[i],deck[j]]=[deck[j],deck[i]]; }
-        playerHand = sortTiles(deck.splice(0,16)); oppHand = deck.splice(0,16);
+        // 初始手牌自動排序
+        playerHand = sortTiles(deck.splice(0,16)); 
+        oppHand = deck.splice(0,16);
         playerDrawTile = null; state = "draw"; selectedIdx = null; render();
     };
 
@@ -172,7 +176,7 @@ const game = (() => {
 
         if (autoScroll) {
             setTimeout(() => {
-                const el = document.getElementById('activeDrawTile') || document.getElementById('playerTiles').lastElementChild;
+                const el = document.getElementById('activeDrawTile') || pt.lastElementChild;
                 el?.scrollIntoView({ behavior: 'smooth', inline: 'end', block: 'nearest' });
             }, 100);
         }
@@ -196,16 +200,19 @@ const game = (() => {
 
     const handleMainBtn = () => {
         if (state === "draw") {
+            // 摸牌前先將現有手牌排序一次（以防萬一）
+            playerHand = sortTiles(playerHand);
             playerDrawTile = deck.pop();
-            selectedIdx = playerHand.length;
+            selectedIdx = playerHand.length; // 選中新摸到的牌
             state = "discard";
-            render(true); // 觸發自動滑動
+            render(true);
         } else if (state === "discard") {
             if (selectedIdx === null) return;
             let all = [...playerHand]; 
             if(playerDrawTile && playerDrawTile !== "WAIT") all.push(playerDrawTile);
             const discarded = all.splice(selectedIdx, 1)[0];
-            playerHand = all; 
+            // 出牌後，將剩餘手牌再次自動排序
+            playerHand = sortTiles(all); 
             playerDrawTile = null; selectedIdx = null;
             discards.push(discarded); state = "draw"; render();
             setTimeout(() => opponentAI(discarded), 800);
@@ -230,6 +237,8 @@ const game = (() => {
             playerMelds.push(sortTiles([...combo, lastD]));
             playerDrawTile = "WAIT";
         }
+        // 副露後也執行一次排序
+        playerHand = sortTiles(playerHand);
         state = "discard"; selectedIdx = null;
         render(true);
     };
