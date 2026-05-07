@@ -7,33 +7,30 @@
     <style>
         :root { --bg-table: #2e7d32; --gold: #ffd700; --tile-w: 32px; }
         body { background-color: var(--bg-table); margin: 0; display: flex; flex-direction: column; align-items: center; height: 100dvh; font-family: sans-serif; color: white; overflow: hidden; padding-bottom: env(safe-area-inset-bottom); }
-        .status-bar { background: rgba(0,0,0,0.8); padding: 5px 15px; border-radius: 20px; font-size: 0.8rem; border: 1px solid var(--gold); margin-top: 10px; z-index: 10; display: flex; gap: 10px; }
-        .opp-area { width: 100%; display: flex; flex-direction: column; align-items: center; padding: 10px 0; min-height: 110px; background: rgba(0,0,0,0.3); border-bottom: 2px solid rgba(255,255,255,0.1); }
+        .status-bar { background: rgba(0,0,0,0.8); padding: 5px 15px; border-radius: 20px; font-size: 0.8rem; border: 1px solid var(--gold); margin-top: 10px; z-index: 10; }
+        .opp-area { width: 100%; display: flex; flex-direction: column; align-items: center; padding: 10px 0; min-height: 110px; background: rgba(0,0,0,0.3); }
         .meld-group { display: flex; gap: 1px; background: rgba(0,0,0,0.2); padding: 2px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.3); }
         .tile-sm { width: 22px; border-radius: 2px; }
         .mahjong-area { flex: 1; display: flex; flex-direction: column; justify-content: space-between; width: 100%; max-width: 500px; padding: 5px; box-sizing: border-box; }
         .discard-area { background: rgba(0,0,0,0.2); border-radius: 10px; height: 110px; margin: 5px; display: grid; grid-template-columns: repeat(9, 1fr); gap: 4px; padding: 10px; overflow-y: auto; }
         .discard-tile { width: 24px; margin: 0 auto; }
-        .discard-tile.last { border: 2px solid var(--gold); border-radius: 2px; box-shadow: 0 0 8px var(--gold); }
-        .hand-scroll-container { width: 100%; overflow-x: auto; padding: 10px 0; }
-        .player-hand-stack { display: flex; flex-direction: column; gap: 8px; padding: 0 25px; min-width: max-content; }
-        .meld-zone { display: flex; gap: 8px; min-height: 35px; }
-        .hand-row { display: flex; align-items: flex-end; min-height: 60px; gap: 3px; }
+        .discard-tile.last { border: 2px solid var(--gold); box-shadow: 0 0 8px var(--gold); }
+        .action-bar { display: flex; justify-content: center; gap: 6px; margin-bottom: 8px; width: 95%; height: 45px; }
+        .btn { padding: 10px 0; background: #555; border: none; border-radius: 8px; font-weight: bold; flex: 1; color: #999; font-size: 0.9rem; pointer-events: none; }
+        .btn.active { background: #fff; color: #333; pointer-events: auto; box-shadow: 0 4px 0 #ccc; }
+        .btn.can-win { background: var(--gold) !important; color: #000; animation: win-glow 0.5s infinite alternate; pointer-events: auto; }
+        @keyframes win-glow { from { transform: scale(1); } to { transform: scale(1.05); box-shadow: 0 0 15px var(--gold); } }
+        .hand-row { display: flex; align-items: flex-end; min-height: 65px; gap: 3px; padding: 10px 20px; }
         .tile { width: var(--tile-w); cursor: pointer; transition: 0.1s; position: relative; }
         .tile img { width: 100%; border-radius: 3px; display: block; }
         .tile.selected { transform: translateY(-15px); }
-        .draw-gap { margin-left: 15px; border-left: 2px solid rgba(255,255,255,0.3); padding-left: 8px; }
-        .action-bar { display: flex; justify-content: center; gap: 6px; margin-bottom: 8px; width: 95%; }
-        .btn { padding: 12px 0; background: #eee; border: none; border-radius: 8px; font-weight: bold; flex: 1; color: #333; font-size: 0.9rem; }
-        .btn.can-win { background: var(--gold) !important; color: #000; animation: win-flash 0.5s infinite alternate; }
-        @keyframes win-flash { from { transform: scale(1); } to { transform: scale(1.05); box-shadow: 0 0 15px var(--gold); } }
         .control-panel { width: 100%; display: flex; justify-content: center; padding: 10px 0 40px 0; background: rgba(0,0,0,0.2); }
         .btn-main { width: 90%; height: 55px; background: #fff; color: #d32f2f; font-size: 1.3rem; border: none; border-radius: 12px; font-weight: bold; }
     </style>
 </head>
 <body>
 
-<div class="status-bar"><span>𓃥 白六</span> | <span id="totalGold">1,800,000</span> 金圓 | 剩餘 <span id="deckCount">0</span> 張</div>
+<div class="status-bar">𓃥 白六 | <span id="totalGold">1,800,000</span> 金圓 | 剩餘 <span id="deckCount">0</span> 張</div>
 
 <div class="opp-area">
     <div id="oppMelds" style="display:flex; gap:8px;"></div>
@@ -43,73 +40,61 @@
 <div class="mahjong-area">
     <div id="discardPile" class="discard-area"></div>
     <div class="action-bar">
-        <button id="btn-chi" class="btn" onclick="game.modeToggle('chi')">吃</button>
-        <button id="btn-peng" class="btn" onclick="game.modeToggle('peng')">碰</button>
-        <button id="btn-gang" class="btn" onclick="game.modeToggle('gang')">槓</button>
+        <button id="btn-chi" class="btn" onclick="game.executeMeld('chi')">吃</button>
+        <button id="btn-peng" class="btn" onclick="game.executeMeld('peng')">碰</button>
+        <button id="btn-gang" class="btn" onclick="game.executeMeld('gang')">槓</button>
         <button id="btn-win" class="btn" onclick="game.checkPlayerWin()">胡</button>
     </div>
-    <div class="hand-scroll-container">
-        <div class="player-hand-stack">
-            <div id="playerMelds" class="meld-zone"></div>
-            <div class="hand-row">
-                <div id="playerTiles" style="display:flex; gap:3px;"></div>
-                <div id="newDrawTileContainer"></div>
-            </div>
+    <div class="player-hand-stack">
+        <div id="playerMelds" style="display:flex; gap:8px; padding-left:20px;"></div>
+        <div class="hand-row">
+            <div id="playerTiles" style="display:flex; gap:2px;"></div>
+            <div id="newDrawTileContainer" style="margin-left:15px; border-left:2px solid rgba(255,255,255,0.2); padding-left:8px;"></div>
         </div>
     </div>
 </div>
 
-<div class="control-panel"><button id="btn-main-action" class="btn-main" onclick="game.userAction()">摸牌</button></div>
+<div class="control-panel"><button id="btn-main-action" class="btn-main" onclick="game.handleMainBtn()">摸牌</button></div>
 
 <script>
 const game = (() => {
     const svgBase = `https://raw.githubusercontent.com/kuochili-ops/mahjong_graphic/main/${encodeURIComponent("Vectors 矢量图")}/SVG/`;
     let deck = [], playerHand = [], playerMelds = [], oppHand = [], oppMelds = [], discards = [];
-    let playerDrawTile = null, selectedIndices = [], activeMode = null, totalGold = 1800000;
+    let playerDrawTile = null, selectedIdx = null, totalGold = 1800000;
+    let state = "draw"; // draw, discard
 
     const sortTiles = (h) => [...h].sort((a,b) => {
         const order = {m:0, p:100, s:200, z:300};
         return (parseInt(a) + order[a.slice(-1)]) - (parseInt(b) + order[b.slice(-1)]);
     });
 
-    // --- 公平胡牌引擎 (17張標準) ---
     const isMahjong = (hand) => {
         if (hand.length % 3 !== 2) return false;
-        const counts = {};
-        hand.forEach(t => counts[t] = (counts[t] || 0) + 1);
-        const uniqueTiles = Object.keys(counts);
-
-        for (let eye of uniqueTiles) {
+        const counts = {}; hand.forEach(t => counts[t] = (counts[t] || 0) + 1);
+        for (let eye in counts) {
             if (counts[eye] >= 2) {
-                const tempHand = [...hand];
-                tempHand.splice(tempHand.indexOf(eye), 1);
-                tempHand.splice(tempHand.indexOf(eye), 1);
-                if (solveSets(tempHand)) return true;
+                const temp = [...hand];
+                temp.splice(temp.indexOf(eye), 1); temp.splice(temp.indexOf(eye), 1);
+                if (validateSets(temp)) return true;
             }
         }
         return false;
     };
 
-    const solveSets = (hand) => {
-        if (hand.length === 0) return true;
-        const h = sortTiles(hand);
-        const first = h[0];
-        // 刻子
-        if (h.filter(x => x === first).length >= 3) {
-            const next = [...h];
-            for(let i=0; i<3; i++) next.splice(next.indexOf(first), 1);
-            if (solveSets(next)) return true;
+    const validateSets = (h) => {
+        if (h.length === 0) return true;
+        const sorted = sortTiles(h); const f = sorted[0];
+        if (sorted.filter(x => x === f).length >= 3) {
+            const next = [...sorted]; for(let i=0;i<3;i++) next.splice(next.indexOf(f), 1);
+            if (validateSets(next)) return true;
         }
-        // 順子
-        const val = parseInt(first), suit = first.slice(-1);
-        if (suit !== 'z') {
-            const t2 = `${val+1}${suit}`, t3 = `${val+2}${suit}`;
-            if (h.includes(t2) && h.includes(t3)) {
-                const next = [...h];
-                next.splice(next.indexOf(first), 1);
-                next.splice(next.indexOf(t2), 1);
-                next.splice(next.indexOf(t3), 1);
-                if (solveSets(next)) return true;
+        const v = parseInt(f), s = f.slice(-1);
+        if (s !== 'z') {
+            const t2 = `${v+1}${s}`, t3 = `${v+2}${s}`;
+            if (sorted.includes(t2) && sorted.includes(t3)) {
+                const next = [...sorted];
+                next.splice(next.indexOf(f),1); next.splice(next.indexOf(t2),1); next.splice(next.indexOf(t3),1);
+                if (validateSets(next)) return true;
             }
         }
         return false;
@@ -121,69 +106,91 @@ const game = (() => {
         for(let i=1;i<=7;i++) for(let j=0;j<4;j++) deck.push(`${i}z`); 
         for(let i=deck.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [deck[i],deck[j]]=[deck[j],deck[i]]; }
         playerHand = sortTiles(deck.splice(0,16)); oppHand = deck.splice(0,16);
-        playerDrawTile = null; render();
+        playerDrawTile = null; state = "draw"; render();
     };
 
-    const render = (shouldScroll = false) => {
+    const render = () => {
         document.getElementById('deckCount').innerText = deck.length;
         document.getElementById('totalGold').innerText = totalGold.toLocaleString();
         
-        const winBtn = document.getElementById('btn-win');
-        let full = [...playerHand]; if(playerDrawTile) full.push(playerDrawTile);
-        // 如果場上最後一張牌能讓你胡，也要亮起
-        const lastDiscard = discards[discards.length-1];
-        if(isMahjong(full) || (lastDiscard && isMahjong([...playerHand, lastDiscard]))) {
-            winBtn.classList.add('can-win');
-        } else {
-            winBtn.classList.remove('can-win');
+        const lastD = discards[discards.length-1];
+        const canWin = isMahjong(playerDrawTile ? [...playerHand, playerDrawTile] : (lastD ? [...playerHand, lastD] : []));
+        document.getElementById('btn-win').className = `btn ${canWin ? 'can-win' : ''}`;
+        
+        const chiBtn = document.getElementById('btn-chi'), pengBtn = document.getElementById('btn-peng'), gangBtn = document.getElementById('btn-gang');
+        chiBtn.classList.remove('active'); pengBtn.classList.remove('active'); gangBtn.classList.remove('active');
+        
+        if (lastD && state === "draw") {
+            if (playerHand.filter(x => x === lastD).length >= 2) pengBtn.classList.add('active');
+            if (playerHand.filter(x => x === lastD).length >= 3) gangBtn.classList.add('active');
+            const v = parseInt(lastD), s = lastD.slice(-1);
+            if (s !== 'z') {
+                const has = (n) => playerHand.includes(`${n}${s}`);
+                if ((has(v-2)&&has(v-1)) || (has(v-1)&&has(v+1)) || (has(v+1)&&has(v+2))) chiBtn.classList.add('active');
+            }
         }
 
         const pt = document.getElementById('playerTiles'); pt.innerHTML = '';
         playerHand.forEach((t, i) => {
             const div = document.createElement('div');
-            div.className = `tile ${selectedIndices.includes(i)?'selected':''}`;
-            div.innerHTML = `<img src="${svgBase}${t}.svg">`; 
-            div.onclick = () => toggleSelect(i); pt.appendChild(div);
+            div.className = `tile ${selectedIdx === i ? 'selected' : ''}`;
+            div.innerHTML = `<img src="${svgBase}${t}.svg">`; div.onclick = () => { selectedIdx = i; render(); };
+            pt.appendChild(div);
         });
 
-        const drawContainer = document.getElementById('newDrawTileContainer');
-        drawContainer.innerHTML = '';
+        const drawContainer = document.getElementById('newDrawTileContainer'); drawContainer.innerHTML = '';
         if(playerDrawTile) {
             const div = document.createElement('div');
-            div.id = "activeNewTile";
-            div.className = `tile draw-gap ${selectedIndices.includes(playerHand.length)?'selected':''}`;
+            div.className = `tile ${selectedIdx === playerHand.length ? 'selected' : ''}`;
             div.innerHTML = `<img src="${svgBase}${playerDrawTile}.svg">`; 
-            div.onclick = () => toggleSelect(playerHand.length); 
+            div.onclick = () => { selectedIdx = playerHand.length; render(); };
             drawContainer.appendChild(div);
         }
 
         document.getElementById('playerMelds').innerHTML = playerMelds.map(g => `<div class="meld-group">${g.map(t=>`<img class="tile-sm" src="${svgBase}${t}.svg">`).join('')}</div>`).join('');
         document.getElementById('oppMelds').innerHTML = oppMelds.map(g => `<div class="meld-group">${g.map(t=>`<img class="tile-sm" src="${svgBase}${t}.svg">`).join('')}</div>`).join('');
-        
         const dp = document.getElementById('discardPile');
         dp.innerHTML = discards.map((t,idx) => `<img class="discard-tile ${idx===discards.length-1?'last':''}" src="${svgBase}${t}.svg">`).join('');
         dp.scrollTop = dp.scrollHeight;
-        if (shouldScroll && playerDrawTile) setTimeout(() => document.getElementById('activeNewTile')?.scrollIntoView({ behavior: 'smooth', inline: 'end' }), 50);
+        
+        document.getElementById('btn-main-action').innerText = state === "discard" ? "請選一張放出" : "摸牌";
     };
 
-    const userAction = () => {
-        if (activeMode) {
-            const target = (activeMode === 'chi' || activeMode === 'peng') ? 2 : 3;
-            if (selectedIndices.length !== target) return;
-            const lastD = discards.pop();
-            const picked = selectedIndices.map(idx => (idx === playerHand.length) ? playerDrawTile : playerHand[idx]);
-            playerHand = playerHand.filter((_, idx) => !selectedIndices.includes(idx));
-            playerMelds.push(sortTiles([...picked, lastD]));
-            activeMode = null; selectedIndices = []; render(); return;
-        }
-        if (!playerDrawTile) { playerDrawTile = deck.pop(); render(true); return; }
-        if (selectedIndices.length === 1) {
+    const handleMainBtn = () => {
+        if (state === "draw") {
+            playerDrawTile = deck.pop();
+            selectedIdx = playerHand.length;
+            state = "discard";
+            render();
+        } else if (state === "discard") {
+            if (selectedIdx === null) return;
             let all = [...playerHand]; if(playerDrawTile) all.push(playerDrawTile);
-            const discarded = all.splice(selectedIndices[0], 1)[0];
-            playerHand = sortTiles(all); playerDrawTile = null; selectedIndices = [];
-            discards.push(discarded); render();
-            setTimeout(() => opponentAI(discarded), 600);
+            const discarded = all.splice(selectedIdx, 1)[0];
+            playerHand = sortTiles(all); playerDrawTile = null; selectedIdx = null;
+            discards.push(discarded); state = "draw"; render();
+            setTimeout(() => opponentAI(discarded), 800);
         }
+    };
+
+    const executeMeld = (type) => {
+        const lastD = discards.pop();
+        if (type === 'peng' || type === 'gang') {
+            const count = type === 'peng' ? 2 : 3;
+            for(let i=0; i<count; i++) playerHand.splice(playerHand.indexOf(lastD), 1);
+            playerMelds.push(new Array(count + 1).fill(lastD));
+            if (type === 'gang') {
+                playerDrawTile = deck.pop(); // 補牌
+            }
+        } else if (type === 'chi') {
+            const v = parseInt(lastD), s = lastD.slice(-1);
+            let combo = playerHand.includes(`${v-1}${s}`) && playerHand.includes(`${v+1}${s}`) ? [`${v-1}${s}`, `${v+1}${s}`] :
+                        playerHand.includes(`${v+1}${s}`) && playerHand.includes(`${v+2}${s}`) ? [`${v+1}${s}`, `${v+2}${s}`] : [`${v-2}${s}`, `${v-1}${s}`];
+            combo.forEach(t => playerHand.splice(playerHand.indexOf(t), 1));
+            playerMelds.push(sortTiles([...combo, lastD]));
+        }
+        state = "discard"; 
+        selectedIdx = null;
+        render();
     };
 
     const opponentAI = (lastD) => {
@@ -192,35 +199,22 @@ const game = (() => {
         if (isMahjong([...oppHand, drawn])) { oppHand.push(drawn); handleWin(false, "自摸"); return; }
         oppHand.push(drawn);
         discards.push(oppHand.splice(Math.floor(Math.random()*oppHand.length), 1)[0]);
-        render(); // 此處渲染會觸發玩家的胡牌按鈕檢測（針對對手剛打出的牌）
+        render();
     };
 
     const checkPlayerWin = () => {
-        let full = [...playerHand]; if(playerDrawTile) full.push(playerDrawTile);
         const lastD = discards[discards.length-1];
-        if (isMahjong(full)) handleWin(true, "自摸");
-        else if (lastD && isMahjong([...playerHand, lastD])) handleWin(true, "榮和");
-        else alert("尚未達成胡牌條件！");
+        if (playerDrawTile && isMahjong([...playerHand, playerDrawTile])) handleWin(true, "自摸");
+        else if (isMahjong([...playerHand, lastD])) { discards.pop(); handleWin(true, "榮和"); }
     };
 
     const handleWin = (isP, type) => {
         document.getElementById('oppHandReveal').innerHTML = sortTiles(oppHand).map(t => `<img class="tile-sm" src="${svgBase}${t}.svg">`).join('');
         totalGold += isP ? 100000 : -100000;
-        setTimeout(() => { alert(`${isP?'恭喜！你胡牌了！':'對手胡牌'} \n方式：${type}`); init(); }, 500);
+        setTimeout(() => { alert(`${isP?'恭喜胡牌！':'對手胡牌'} \n類型：${type}`); init(); }, 500);
     };
 
-    const toggleSelect = (i) => {
-        if (activeMode) {
-            const target = (activeMode === 'chi' || activeMode === 'peng') ? 2 : 3;
-            if (selectedIndices.includes(i)) selectedIndices = selectedIndices.filter(x => x !== i);
-            else if (selectedIndices.length < target) selectedIndices.push(i);
-        } else { selectedIndices = [i]; }
-        render();
-    };
-
-    const modeToggle = (m) => { activeMode = (activeMode === m) ? null : m; selectedIndices = []; render(); };
-
-    return { init, userAction, modeToggle, checkPlayerWin };
+    return { init, handleMainBtn, executeMeld, checkPlayerWin };
 })();
 window.onload = game.init;
 </script>
