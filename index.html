@@ -19,7 +19,6 @@
         .discard-tile { width: 24px; margin: 0 auto; }
         .discard-tile.last { border: 2px solid var(--gold); box-shadow: 0 0 8px var(--gold); }
 
-        /* 結算畫面 */
         .win-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); display:none; flex-direction:column; justify-content:center; align-items:center; z-index:200; }
         .win-card { background:#fff; color:#333; width:85%; max-width:320px; border-radius:15px; padding:20px; text-align:center; box-shadow:0 0 20px var(--gold); }
         .win-title { font-size:1.5rem; font-weight:bold; color:#d32f2f; margin-bottom:10px; }
@@ -60,7 +59,7 @@
         <button id="btn-win" class="btn" onclick="game.checkPlayerWin()">胡</button>
     </div>
     <div id="playerMelds" style="display:flex; gap:8px; padding-left:30px; min-height:35px;"></div>
-    <div class="hand-scroll-view" id="handScroll">
+    <div class="hand-scroll-view">
         <div class="hand-container-inner">
             <div id="playerTiles" style="display:flex; gap:3px;"></div>
             <div id="newDrawContainer"></div>
@@ -131,16 +130,22 @@ const game = (() => {
         ['m','p','s'].forEach(t => { for(let i=1;i<=9;i++) for(let j=0;j<4;j++) deck.push(`${i}${t}`); });
         for(let i=1;i<=7;i++) for(let j=0;j<4;j++) deck.push(`${i}z`); 
         for(let i=deck.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [deck[i],deck[j]]=[deck[j],deck[i]]; }
-        playerHand = sortTiles(deck.splice(0,16)); oppHand = deck.splice(0,16);
+        playerHand = sortTiles(deck.splice(0,16)); 
+        oppHand = deck.splice(0,16); // AI 初期不排序，模擬摸牌狀態
         playerDrawTile = null; state = "draw"; selectedIdx = null; render();
     };
 
     const render = (autoScroll = false, revealOpp = false) => {
         document.getElementById('deckCount').innerText = deck.length;
         document.getElementById('totalGold').innerText = totalGold.toLocaleString();
+        
         const oppUI = document.getElementById('oppHandUI');
         oppUI.innerHTML = '';
-        oppHand.forEach(t => {
+        
+        // 牌局結束時，將對手手牌排序顯示
+        const finalOppHand = revealOpp ? sortTiles(oppHand) : oppHand;
+
+        finalOppHand.forEach(t => {
             if (revealOpp) {
                 const img = document.createElement('img');
                 img.src = `${svgBase}${t}.svg`; img.className = 'tile-sm';
@@ -151,9 +156,11 @@ const game = (() => {
                 oppUI.appendChild(back);
             }
         });
+
         const lastD = discards[discards.length-1];
         const canWin = isMahjong(playerDrawTile ? [...playerHand, playerDrawTile] : (lastD ? [...playerHand, lastD] : []));
         document.getElementById('btn-win').className = `btn ${canWin ? 'can-win' : ''}`;
+        
         const chiBtn = document.getElementById('btn-chi'), pengBtn = document.getElementById('btn-peng'), gangBtn = document.getElementById('btn-gang');
         chiBtn.classList.remove('active'); pengBtn.classList.remove('active'); gangBtn.classList.remove('active');
         if (lastD && state === "draw") {
@@ -162,6 +169,7 @@ const game = (() => {
             const v = parseInt(lastD), s = lastD.slice(-1);
             if (s !== 'z' && ((playerHand.includes(`${v-2}${s}`)&&playerHand.includes(`${v-1}${s}`)) || (playerHand.includes(`${v-1}${s}`)&&playerHand.includes(`${v+1}${s}`)) || (playerHand.includes(`${v+1}${s}`)&&playerHand.includes(`${v+2}${s}`)))) chiBtn.classList.add('active');
         }
+
         const pt = document.getElementById('playerTiles'); pt.innerHTML = '';
         playerHand.forEach((t, i) => {
             const div = document.createElement('div');
@@ -170,6 +178,7 @@ const game = (() => {
             div.onclick = () => handleTileClick(i);
             pt.appendChild(div);
         });
+
         const drawBox = document.getElementById('newDrawContainer'); drawBox.innerHTML = '';
         if(playerDrawTile && playerDrawTile !== "WAIT") {
             const div = document.createElement('div');
@@ -179,38 +188,24 @@ const game = (() => {
             div.onclick = () => handleTileClick(playerHand.length);
             drawBox.appendChild(div);
         }
+
         document.getElementById('playerMelds').innerHTML = playerMelds.map(g => `<div class="meld-group">${g.map(t=>`<img class="tile-sm" src="${svgBase}${t}.svg">`).join('')}</div>`).join('');
         document.getElementById('oppMelds').innerHTML = oppMelds.map(g => `<div class="meld-group">${g.map(t=>`<img class="tile-sm" src="${svgBase}${t}.svg">`).join('')}</div>`).join('');
         const dp = document.getElementById('discardPile');
         dp.innerHTML = discards.map((t,idx) => `<img class="discard-tile ${idx===discards.length-1?'last':''}" src="${svgBase}${t}.svg">`).join('');
         dp.scrollTop = dp.scrollHeight;
+        
         document.getElementById('btn-main-action').innerText = state === "discard" ? "選一張放出" : "摸牌";
-        if (autoScroll) {
-            setTimeout(() => {
-                const el = document.getElementById('activeDrawTile') || pt.lastElementChild;
-                el?.scrollIntoView({ behavior: 'smooth', inline: 'end', block: 'nearest' });
-            }, 100);
-        }
     };
 
     const calculateFans = (isSelfDraw) => {
-        let fans = [];
+        let fans = [{name: "底", count: 0}]; 
         let all = [...playerHand];
         if (playerDrawTile && playerDrawTile !== "WAIT") all.push(playerDrawTile);
         else if (!isSelfDraw) all.push(discards[discards.length-1]);
-        
-        fans.push({name: "底", count: 0}); // 基礎分
         if (isSelfDraw) fans.push({name: "自摸", count: 1});
 
-        // 簡易牌型判斷
-        const isAllPungs = playerMelds.every(m => m[0] === m[1] && m[1] === m[2]) && validatePungs(all);
-        if (isAllPungs) fans.push({name: "碰碰胡", count: 4});
-
-        const suits = new Set(all.map(t => t.slice(-1)).concat(playerMelds.flatMap(m => m.map(t => t.slice(-1)))));
-        if (suits.size === 1) fans.push({name: "清一色", count: 8});
-        else if (suits.size === 2 && (suits.has('z'))) fans.push({name: "混一色", count: 4});
-
-        // 判斷三元牌
+        const counts = {}; all.forEach(t => counts[t] = (counts[t] || 0) + 1);
         const zCounts = {};
         all.forEach(t => { if(t.endsWith('z')) zCounts[t] = (zCounts[t] || 0) + 1; });
         playerMelds.forEach(m => { if(m[0].endsWith('z')) zCounts[m[0]] = (zCounts[m[0]] || 0) + 3; });
@@ -218,17 +213,11 @@ const game = (() => {
         if (zCounts['6z'] >= 3) fans.push({name: "發財", count: 1});
         if (zCounts['7z'] >= 3) fans.push({name: "紅中", count: 1});
 
+        const suits = new Set(all.map(t => t.slice(-1)).concat(playerMelds.flatMap(m => m.map(t => t.slice(-1)))));
+        if (suits.size === 1) fans.push({name: "清一色", count: 8});
+        else if (suits.size === 2 && suits.has('z')) fans.push({name: "混一色", count: 4});
+        
         return fans;
-    };
-
-    const validatePungs = (h) => {
-        const counts = {}; h.forEach(t => counts[t] = (counts[t] || 0) + 1);
-        let pairs = 0;
-        for (let t in counts) {
-            if (counts[t] === 2) pairs++;
-            else if (counts[t] !== 3 && counts[t] !== 0) return false;
-        }
-        return pairs === 1;
     };
 
     const handleWin = (isP, isSelfDraw) => {
@@ -238,17 +227,33 @@ const game = (() => {
             const totalFans = fans.reduce((s, f) => s + f.count, 0);
             const goldEarned = 10000 + (totalFans * 5000);
             totalGold += goldEarned;
-
-            document.getElementById('winType').innerText = isSelfDraw ? "自摸胡！" : "胡牌！";
+            document.getElementById('winType').innerText = isSelfDraw ? "自摸！" : "榮和！";
             document.getElementById('winDetails').innerHTML = fans.map(f => `<div class="fan-item"><span>${f.name}</span><span>${f.count} 台</span></div>`).join('');
             document.getElementById('totalFans').innerText = totalFans;
             document.getElementById('winGoldText').innerText = goldEarned.toLocaleString();
             document.getElementById('winOverlay').style.display = 'flex';
         } else {
-            alert("對手胡牌了！");
+            alert("對手胡牌了！(已分類顯示對手牌)");
             totalGold -= 20000;
-            init();
+            setTimeout(() => init(), 3000);
         }
+    };
+
+    const opponentAI = (lastD) => {
+        if (isMahjong([...oppHand, lastD])) { handleWin(false, false); return; }
+        // AI 邏輯：有大字對子必碰
+        const count = oppHand.filter(x => x === lastD).length;
+        if (count >= 2 && (lastD.endsWith('z') || Math.random() > 0.7)) {
+            for(let i=0; i<count; i++) oppHand.splice(oppHand.indexOf(lastD), 1);
+            oppMelds.push(new Array(count + 1).fill(lastD));
+            discards.push(oppHand.splice(Math.floor(Math.random()*oppHand.length), 1)[0]);
+            render(); return;
+        }
+        const drawn = deck.pop();
+        if (isMahjong([...oppHand, drawn])) { oppHand.push(drawn); handleWin(false, true); return; }
+        oppHand.push(drawn);
+        discards.push(oppHand.splice(Math.floor(Math.random()*oppHand.length), 1)[0]);
+        render();
     };
 
     const handleTileClick = (idx) => {
@@ -265,18 +270,13 @@ const game = (() => {
 
     const handleMainBtn = () => {
         if (state === "draw") {
-            playerHand = sortTiles(playerHand);
-            playerDrawTile = deck.pop();
-            selectedIdx = playerHand.length;
-            state = "discard";
-            render(true);
+            playerDrawTile = deck.pop(); selectedIdx = playerHand.length;
+            state = "discard"; render();
         } else if (state === "discard") {
             if (selectedIdx === null) return;
-            let all = [...playerHand]; 
-            if(playerDrawTile && playerDrawTile !== "WAIT") all.push(playerDrawTile);
+            let all = [...playerHand]; if(playerDrawTile && playerDrawTile !== "WAIT") all.push(playerDrawTile);
             const discarded = all.splice(selectedIdx, 1)[0];
-            playerHand = sortTiles(all); 
-            playerDrawTile = null; selectedIdx = null;
+            playerHand = sortTiles(all); playerDrawTile = null; selectedIdx = null;
             discards.push(discarded); state = "draw"; render();
             setTimeout(() => opponentAI(discarded), 800);
         }
@@ -284,15 +284,12 @@ const game = (() => {
 
     const executeMeld = (type) => {
         const lastD = discards.pop();
-        if (type === 'peng' || type === 'gang') {
-            const count = type === 'peng' ? 2 : 3;
-            for(let i=0; i<count; i++) playerHand.splice(playerHand.indexOf(lastD), 1);
-            playerMelds.push(new Array(count + 1).fill(lastD));
-            if (type === 'gang') { playerDrawTile = deck.pop(); selectedIdx = playerHand.length; }
-            else playerDrawTile = "WAIT";
-        }
-        playerHand = sortTiles(playerHand);
-        state = "discard"; selectedIdx = null; render(true);
+        const count = type === 'peng' ? 2 : 3;
+        for(let i=0; i<count; i++) playerHand.splice(playerHand.indexOf(lastD), 1);
+        playerMelds.push(new Array(count + 1).fill(lastD));
+        if (type === 'gang') { playerDrawTile = deck.pop(); selectedIdx = playerHand.length; }
+        else playerDrawTile = "WAIT";
+        state = "discard"; render();
     };
 
     const executeChi = () => {
@@ -303,17 +300,7 @@ const game = (() => {
         combo.forEach(t => playerHand.splice(playerHand.indexOf(t), 1));
         playerMelds.push(sortTiles([...combo, lastD]));
         playerDrawTile = "WAIT";
-        playerHand = sortTiles(playerHand);
-        state = "discard"; selectedIdx = null; render(true);
-    };
-
-    const opponentAI = (lastD) => {
-        if (isMahjong([...oppHand, lastD])) { handleWin(false, false); return; }
-        const drawn = deck.pop();
-        if (isMahjong([...oppHand, drawn])) { oppHand.push(drawn); handleWin(false, true); return; }
-        oppHand.push(drawn);
-        discards.push(oppHand.splice(Math.floor(Math.random()*oppHand.length), 1)[0]);
-        render();
+        state = "discard"; render();
     };
 
     const checkPlayerWin = () => {
