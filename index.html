@@ -61,7 +61,7 @@ const game = (() => {
     const svgBase = `https://raw.githubusercontent.com/kuochili-ops/mahjong_graphic/main/${encodeURIComponent("Vectors 矢量图")}/SVG/`;
     let deck = [], playerHand = [], playerMelds = [], oppHand = [], oppMelds = [], discards = [];
     let playerDrawTile = null, selectedIdx = null, totalGold = 1800000;
-    let state = "draw"; // draw, discard
+    let state = "draw"; 
 
     const sortTiles = (h) => [...h].sort((a,b) => {
         const order = {m:0, p:100, s:200, z:300};
@@ -69,11 +69,12 @@ const game = (() => {
     });
 
     const isMahjong = (hand) => {
-        if (hand.length % 3 !== 2) return false;
-        const counts = {}; hand.forEach(t => counts[t] = (counts[t] || 0) + 1);
+        const cleanHand = hand.filter(t => t !== "WAIT_FOR_DISCARD");
+        if (cleanHand.length % 3 !== 2) return false;
+        const counts = {}; cleanHand.forEach(t => counts[t] = (counts[t] || 0) + 1);
         for (let eye in counts) {
             if (counts[eye] >= 2) {
-                const temp = [...hand];
+                const temp = [...cleanHand];
                 temp.splice(temp.indexOf(eye), 1); temp.splice(temp.indexOf(eye), 1);
                 if (validateSets(temp)) return true;
             }
@@ -106,7 +107,7 @@ const game = (() => {
         for(let i=1;i<=7;i++) for(let j=0;j<4;j++) deck.push(`${i}z`); 
         for(let i=deck.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [deck[i],deck[j]]=[deck[j],deck[i]]; }
         playerHand = sortTiles(deck.splice(0,16)); oppHand = deck.splice(0,16);
-        playerDrawTile = null; state = "draw"; render();
+        playerDrawTile = null; state = "draw"; selectedIdx = null; render();
     };
 
     const render = () => {
@@ -134,16 +135,17 @@ const game = (() => {
         playerHand.forEach((t, i) => {
             const div = document.createElement('div');
             div.className = `tile ${selectedIdx === i ? 'selected' : ''}`;
-            div.innerHTML = `<img src="${svgBase}${t}.svg">`; div.onclick = () => { selectedIdx = i; render(); };
+            div.innerHTML = `<img src="${svgBase}${t}.svg">`; 
+            div.onclick = () => handleTileClick(i);
             pt.appendChild(div);
         });
 
         const drawContainer = document.getElementById('newDrawTileContainer'); drawContainer.innerHTML = '';
-        if(playerDrawTile) {
+        if(playerDrawTile && playerDrawTile !== "WAIT_FOR_DISCARD") {
             const div = document.createElement('div');
             div.className = `tile ${selectedIdx === playerHand.length ? 'selected' : ''}`;
             div.innerHTML = `<img src="${svgBase}${playerDrawTile}.svg">`; 
-            div.onclick = () => { selectedIdx = playerHand.length; render(); };
+            div.onclick = () => handleTileClick(playerHand.length);
             drawContainer.appendChild(div);
         }
 
@@ -153,7 +155,25 @@ const game = (() => {
         dp.innerHTML = discards.map((t,idx) => `<img class="discard-tile ${idx===discards.length-1?'last':''}" src="${svgBase}${t}.svg">`).join('');
         dp.scrollTop = dp.scrollHeight;
         
-        document.getElementById('btn-main-action').innerText = state === "discard" ? "請選一張放出" : "摸牌";
+        document.getElementById('btn-main-action').innerText = state === "discard" ? "選一張放出" : "摸牌";
+    };
+
+    // 核心功能：排列移動與選取邏輯
+    const handleTileClick = (idx) => {
+        if (selectedIdx === null) {
+            selectedIdx = idx;
+        } else if (selectedIdx === idx) {
+            selectedIdx = null; // 取消選取
+        } else {
+            // 交換位置邏輯 (僅限手牌之間)
+            if (selectedIdx < playerHand.length && idx < playerHand.length) {
+                [playerHand[selectedIdx], playerHand[idx]] = [playerHand[idx], playerHand[selectedIdx]];
+                selectedIdx = null;
+            } else {
+                selectedIdx = idx; // 如果選到摸到的牌，僅切換選取
+            }
+        }
+        render();
     };
 
     const handleMainBtn = () => {
@@ -164,9 +184,12 @@ const game = (() => {
             render();
         } else if (state === "discard") {
             if (selectedIdx === null) return;
-            let all = [...playerHand]; if(playerDrawTile) all.push(playerDrawTile);
+            let all = [...playerHand]; 
+            if(playerDrawTile && playerDrawTile !== "WAIT_FOR_DISCARD") all.push(playerDrawTile);
+            
             const discarded = all.splice(selectedIdx, 1)[0];
-            playerHand = sortTiles(all); playerDrawTile = null; selectedIdx = null;
+            playerHand = all; // 不自動排序，保留玩家手動排序
+            playerDrawTile = null; selectedIdx = null;
             discards.push(discarded); state = "draw"; render();
             setTimeout(() => opponentAI(discarded), 800);
         }
@@ -179,7 +202,10 @@ const game = (() => {
             for(let i=0; i<count; i++) playerHand.splice(playerHand.indexOf(lastD), 1);
             playerMelds.push(new Array(count + 1).fill(lastD));
             if (type === 'gang') {
-                playerDrawTile = deck.pop(); // 補牌
+                playerDrawTile = deck.pop();
+                selectedIdx = playerHand.length;
+            } else {
+                playerDrawTile = "WAIT_FOR_DISCARD";
             }
         } else if (type === 'chi') {
             const v = parseInt(lastD), s = lastD.slice(-1);
@@ -187,6 +213,7 @@ const game = (() => {
                         playerHand.includes(`${v+1}${s}`) && playerHand.includes(`${v+2}${s}`) ? [`${v+1}${s}`, `${v+2}${s}`] : [`${v-2}${s}`, `${v-1}${s}`];
             combo.forEach(t => playerHand.splice(playerHand.indexOf(t), 1));
             playerMelds.push(sortTiles([...combo, lastD]));
+            playerDrawTile = "WAIT_FOR_DISCARD";
         }
         state = "discard"; 
         selectedIdx = null;
@@ -204,7 +231,7 @@ const game = (() => {
 
     const checkPlayerWin = () => {
         const lastD = discards[discards.length-1];
-        if (playerDrawTile && isMahjong([...playerHand, playerDrawTile])) handleWin(true, "自摸");
+        if (playerDrawTile && playerDrawTile !== "WAIT_FOR_DISCARD" && isMahjong([...playerHand, playerDrawTile])) handleWin(true, "自摸");
         else if (isMahjong([...playerHand, lastD])) { discards.pop(); handleWin(true, "榮和"); }
     };
 
