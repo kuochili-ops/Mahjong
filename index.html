@@ -9,7 +9,9 @@
         body { background-color: var(--bg-table); margin: 0; display: flex; flex-direction: column; align-items: center; height: 100dvh; font-family: sans-serif; color: white; overflow: hidden; padding-bottom: env(safe-area-inset-bottom); }
         .status-bar { background: rgba(0,0,0,0.8); padding: 5px 15px; border-radius: 20px; font-size: 0.8rem; border: 1px solid var(--gold); margin-top: 10px; z-index: 10; }
         
+        /* 對手區域隱藏化 */
         .opp-area { width: 100%; display: flex; flex-direction: column; align-items: center; padding: 10px 0; min-height: 110px; background: rgba(0,0,0,0.3); }
+        .opp-hand-back { width: 20px; height: 30px; background: #c62828; border-radius: 2px; border: 1px solid white; box-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
         .meld-group { display: flex; gap: 1px; background: rgba(0,0,0,0.2); padding: 2px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.3); }
         .tile-sm { width: 22px; border-radius: 2px; }
 
@@ -30,7 +32,6 @@
         .btn { padding: 10px 0; background: #555; border: none; border-radius: 8px; font-weight: bold; flex: 1; color: #999; font-size: 0.9rem; pointer-events: none; }
         .btn.active { background: #fff; color: #333; pointer-events: auto; box-shadow: 0 4px 0 #ccc; }
         .btn.can-win { background: var(--gold) !important; color: #000; animation: win-glow 0.6s infinite alternate; pointer-events: auto; }
-        @keyframes win-glow { from { transform: scale(1); } to { transform: scale(1.05); box-shadow: 0 0 15px var(--gold); } }
 
         .control-panel { width: 100%; display: flex; justify-content: center; padding: 10px 0 40px 0; background: rgba(0,0,0,0.2); }
         .btn-main { width: 90%; height: 55px; background: #fff; color: #d32f2f; font-size: 1.3rem; border: none; border-radius: 12px; font-weight: bold; }
@@ -42,21 +43,18 @@
 
 <div class="opp-area">
     <div id="oppMelds" style="display:flex; gap:8px;"></div>
-    <div id="oppHandReveal" style="display:flex; gap:2px; margin-top:8px;"></div>
+    <div id="oppHandUI" style="display:flex; gap:2px; margin-top:8px;"></div>
 </div>
 
 <div class="mahjong-area">
     <div id="discardPile" class="discard-area"></div>
-    
     <div class="action-bar">
         <button id="btn-chi" class="btn" onclick="game.executeMeld('chi')">吃</button>
         <button id="btn-peng" class="btn" onclick="game.executeMeld('peng')">碰</button>
         <button id="btn-gang" class="btn" onclick="game.executeMeld('gang')">槓</button>
         <button id="btn-win" class="btn" onclick="game.checkPlayerWin()">胡</button>
     </div>
-
     <div id="playerMelds" style="display:flex; gap:8px; padding-left:30px; min-height:35px;"></div>
-    
     <div class="hand-scroll-view" id="handScroll">
         <div class="hand-container-inner">
             <div id="playerTiles" style="display:flex; gap:3px;"></div>
@@ -74,12 +72,9 @@ const game = (() => {
     let playerDrawTile = null, selectedIdx = null, totalGold = 1800000;
     let state = "draw"; 
 
-    // 改進的自動排序邏輯
     const sortTiles = (h) => [...h].sort((a,b) => {
         const order = {m:0, p:100, s:200, z:300};
-        const va = parseInt(a) + order[a.slice(-1)];
-        const vb = parseInt(b) + order[b.slice(-1)];
-        return va - vb;
+        return (parseInt(a) + order[a.slice(-1)]) - (parseInt(b) + order[b.slice(-1)]);
     });
 
     const isMahjong = (hand) => {
@@ -120,16 +115,30 @@ const game = (() => {
         ['m','p','s'].forEach(t => { for(let i=1;i<=9;i++) for(let j=0;j<4;j++) deck.push(`${i}${t}`); });
         for(let i=1;i<=7;i++) for(let j=0;j<4;j++) deck.push(`${i}z`); 
         for(let i=deck.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [deck[i],deck[j]]=[deck[j],deck[i]]; }
-        // 初始手牌自動排序
         playerHand = sortTiles(deck.splice(0,16)); 
         oppHand = deck.splice(0,16);
         playerDrawTile = null; state = "draw"; selectedIdx = null; render();
     };
 
-    const render = (autoScroll = false) => {
+    const render = (autoScroll = false, revealOpp = false) => {
         document.getElementById('deckCount').innerText = deck.length;
         document.getElementById('totalGold').innerText = totalGold.toLocaleString();
         
+        // 顯示對手手牌 (平時隱藏)
+        const oppUI = document.getElementById('oppHandUI');
+        oppUI.innerHTML = '';
+        oppHand.forEach(t => {
+            if (revealOpp) {
+                const img = document.createElement('img');
+                img.src = `${svgBase}${t}.svg`; img.className = 'tile-sm';
+                oppUI.appendChild(img);
+            } else {
+                const back = document.createElement('div');
+                back.className = 'opp-hand-back';
+                oppUI.appendChild(back);
+            }
+        });
+
         const lastD = discards[discards.length-1];
         const canWin = isMahjong(playerDrawTile ? [...playerHand, playerDrawTile] : (lastD ? [...playerHand, lastD] : []));
         document.getElementById('btn-win').className = `btn ${canWin ? 'can-win' : ''}`;
@@ -183,27 +192,22 @@ const game = (() => {
     };
 
     const handleTileClick = (idx) => {
-        if (selectedIdx === null) {
-            selectedIdx = idx;
-        } else if (selectedIdx === idx) {
-            selectedIdx = null;
-        } else {
+        if (selectedIdx === null) selectedIdx = idx;
+        else if (selectedIdx === idx) selectedIdx = null;
+        else {
             if (selectedIdx < playerHand.length && idx < playerHand.length) {
                 [playerHand[selectedIdx], playerHand[idx]] = [playerHand[idx], playerHand[selectedIdx]];
                 selectedIdx = null;
-            } else {
-                selectedIdx = idx;
-            }
+            } else selectedIdx = idx;
         }
         render();
     };
 
     const handleMainBtn = () => {
         if (state === "draw") {
-            // 摸牌前先將現有手牌排序一次（以防萬一）
             playerHand = sortTiles(playerHand);
             playerDrawTile = deck.pop();
-            selectedIdx = playerHand.length; // 選中新摸到的牌
+            selectedIdx = playerHand.length;
             state = "discard";
             render(true);
         } else if (state === "discard") {
@@ -211,7 +215,6 @@ const game = (() => {
             let all = [...playerHand]; 
             if(playerDrawTile && playerDrawTile !== "WAIT") all.push(playerDrawTile);
             const discarded = all.splice(selectedIdx, 1)[0];
-            // 出牌後，將剩餘手牌再次自動排序
             playerHand = sortTiles(all); 
             playerDrawTile = null; selectedIdx = null;
             discards.push(discarded); state = "draw"; render();
@@ -225,10 +228,8 @@ const game = (() => {
             const count = type === 'peng' ? 2 : 3;
             for(let i=0; i<count; i++) playerHand.splice(playerHand.indexOf(lastD), 1);
             playerMelds.push(new Array(count + 1).fill(lastD));
-            if (type === 'gang') {
-                playerDrawTile = deck.pop();
-                selectedIdx = playerHand.length;
-            } else playerDrawTile = "WAIT";
+            if (type === 'gang') { playerDrawTile = deck.pop(); selectedIdx = playerHand.length; }
+            else playerDrawTile = "WAIT";
         } else if (type === 'chi') {
             const v = parseInt(lastD), s = lastD.slice(-1);
             let combo = playerHand.includes(`${v-1}${s}`) && playerHand.includes(`${v+1}${s}`) ? [`${v-1}${s}`, `${v+1}${s}`] :
@@ -237,14 +238,33 @@ const game = (() => {
             playerMelds.push(sortTiles([...combo, lastD]));
             playerDrawTile = "WAIT";
         }
-        // 副露後也執行一次排序
         playerHand = sortTiles(playerHand);
-        state = "discard"; selectedIdx = null;
-        render(true);
+        state = "discard"; selectedIdx = null; render(true);
     };
 
+    // 強化版 AI 邏輯
     const opponentAI = (lastD) => {
+        // 1. 優先判斷胡牌
         if (isMahjong([...oppHand, lastD])) { handleWin(false, "放槍"); return; }
+        
+        // 2. 判斷碰/槓 (特別加強字牌權重)
+        const count = oppHand.filter(x => x === lastD).length;
+        if (count >= 2) {
+            const isHonor = lastD.includes('z');
+            if (isHonor || Math.random() > 0.3) { // 字牌必碰，其他牌 70% 概率碰
+                for(let i=0; i<count; i++) oppHand.splice(oppHand.indexOf(lastD), 1);
+                oppMelds.push(new Array(count + 1).fill(lastD));
+                if (count === 3) { // 槓
+                    oppHand.push(deck.pop());
+                }
+                const discarded = oppHand.splice(Math.floor(Math.random()*oppHand.length), 1)[0];
+                discards.push(discarded);
+                render();
+                return;
+            }
+        }
+
+        // 3. 正常摸牌
         const drawn = deck.pop();
         if (isMahjong([...oppHand, drawn])) { oppHand.push(drawn); handleWin(false, "自摸"); return; }
         oppHand.push(drawn);
@@ -259,7 +279,7 @@ const game = (() => {
     };
 
     const handleWin = (isP, type) => {
-        document.getElementById('oppHandReveal').innerHTML = sortTiles(oppHand).map(t => `<img class="tile-sm" src="${svgBase}${t}.svg">`).join('');
+        render(false, true); // 遊戲結束翻開對手牌
         totalGold += isP ? 100000 : -100000;
         setTimeout(() => { alert(`${isP?'恭喜胡牌！':'對手胡牌'} \n類型：${type}`); init(); }, 500);
     };
