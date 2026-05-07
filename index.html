@@ -19,6 +19,11 @@
         .discard-tile { width: 24px; margin: 0 auto; }
         .discard-tile.last { border: 2px solid var(--gold); box-shadow: 0 0 8px var(--gold); }
 
+        /* 多重吃牌選擇選單 */
+        .chi-selector-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; justify-content: center; align-items: center; z-index: 100; }
+        .chi-options { background: #444; padding: 20px; border-radius: 15px; border: 2px solid var(--gold); display: flex; gap: 15px; flex-wrap: wrap; justify-content: center; }
+        .chi-option-item { display: flex; flex-direction: column; align-items: center; gap: 5px; cursor: pointer; background: rgba(255,255,255,0.1); padding: 10px; border-radius: 8px; }
+
         .hand-scroll-view { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; scroll-behavior: smooth; padding: 15px 0; }
         .hand-container-inner { display: flex; align-items: flex-end; min-width: max-content; padding: 0 30px; gap: 3px; }
         
@@ -49,7 +54,7 @@
     <div id="discardPile" class="discard-area"></div>
     
     <div class="action-bar">
-        <button id="btn-chi" class="btn" onclick="game.executeMeld('chi')">吃</button>
+        <button id="btn-chi" class="btn" onclick="game.openChiSelector()">吃</button>
         <button id="btn-peng" class="btn" onclick="game.executeMeld('peng')">碰</button>
         <button id="btn-gang" class="btn" onclick="game.executeMeld('gang')">槓</button>
         <button id="btn-win" class="btn" onclick="game.checkPlayerWin()">胡</button>
@@ -66,6 +71,10 @@
 </div>
 
 <div class="control-panel"><button id="btn-main-action" class="btn-main" onclick="game.handleMainBtn()">摸牌</button></div>
+
+<div id="chiSelector" class="chi-selector-overlay" onclick="game.closeChiSelector(event)">
+    <div class="chi-options" id="chiOptionsContainer"></div>
+</div>
 
 <script>
 const game = (() => {
@@ -117,8 +126,7 @@ const game = (() => {
         ['m','p','s'].forEach(t => { for(let i=1;i<=9;i++) for(let j=0;j<4;j++) deck.push(`${i}${t}`); });
         for(let i=1;i<=7;i++) for(let j=0;j<4;j++) deck.push(`${i}z`); 
         for(let i=deck.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [deck[i],deck[j]]=[deck[j],deck[i]]; }
-        playerHand = sortTiles(deck.splice(0,16)); 
-        oppHand = deck.splice(0,16);
+        playerHand = sortTiles(deck.splice(0,16)); oppHand = deck.splice(0,16);
         playerDrawTile = null; state = "draw"; selectedIdx = null; render();
     };
 
@@ -147,13 +155,10 @@ const game = (() => {
         const chiBtn = document.getElementById('btn-chi'), pengBtn = document.getElementById('btn-peng'), gangBtn = document.getElementById('btn-gang');
         chiBtn.classList.remove('active'); pengBtn.classList.remove('active'); gangBtn.classList.remove('active');
         
-        // 多重動作判斷邏輯
         if (lastD && state === "draw") {
-            // 判斷碰與槓
             if (playerHand.filter(x => x === lastD).length >= 2) pengBtn.classList.add('active');
             if (playerHand.filter(x => x === lastD).length >= 3) gangBtn.classList.add('active');
             
-            // 判斷吃 (僅能吃上家打出的牌，此處簡化為玩家均可考慮吃)
             const v = parseInt(lastD), s = lastD.slice(-1);
             if (s !== 'z') {
                 const has = (n) => playerHand.includes(`${n}${s}`);
@@ -208,6 +213,57 @@ const game = (() => {
         render();
     };
 
+    const openChiSelector = () => {
+        const lastD = discards[discards.length - 1];
+        if (!lastD) return;
+        const v = parseInt(lastD), s = lastD.slice(-1);
+        if (s === 'z') return;
+
+        const has = (n) => playerHand.includes(`${n}${s}`);
+        const combinations = [];
+        // 判定三種吃法：12(3), (3)45, 2(3)4
+        if (has(v-2) && has(v-1)) combinations.push([`${v-2}${s}`, `${v-1}${s}`]);
+        if (has(v-1) && has(v+1)) combinations.push([`${v-1}${s}`, `${v+1}${s}`]);
+        if (has(v+1) && has(v+2)) combinations.push([`${v+1}${s}`, `${v+2}${s}`]);
+
+        if (combinations.length === 1) {
+            executeMeld('chi', combinations[0]);
+        } else if (combinations.length > 1) {
+            const container = document.getElementById('chiOptionsContainer');
+            container.innerHTML = '';
+            combinations.forEach(combo => {
+                const fullCombo = sortTiles([...combo, lastD]);
+                const opt = document.createElement('div');
+                opt.className = 'chi-option-item';
+                opt.innerHTML = `<div style="display:flex;gap:3px;">${fullCombo.map(t=>`<img class="tile-sm" src="${svgBase}${t}.svg">`).join('')}</div><span style="font-size:12px;">選擇</span>`;
+                opt.onclick = () => { executeMeld('chi', combo); closeChiSelector(); };
+                container.appendChild(opt);
+            });
+            document.getElementById('chiSelector').style.display = 'flex';
+        }
+    };
+
+    const closeChiSelector = (e) => {
+        if (!e || e.target.id === 'chiSelector') document.getElementById('chiSelector').style.display = 'none';
+    };
+
+    const executeMeld = (type, chiCombo = null) => {
+        const lastD = discards.pop();
+        if (type === 'peng' || type === 'gang') {
+            const count = type === 'peng' ? 2 : 3;
+            for(let i=0; i<count; i++) playerHand.splice(playerHand.indexOf(lastD), 1);
+            playerMelds.push(new Array(count + 1).fill(lastD));
+            if (type === 'gang') { playerDrawTile = deck.pop(); selectedIdx = playerHand.length; }
+            else playerDrawTile = "WAIT";
+        } else if (type === 'chi') {
+            chiCombo.forEach(t => playerHand.splice(playerHand.indexOf(t), 1));
+            playerMelds.push(sortTiles([...chiCombo, lastD]));
+            playerDrawTile = "WAIT";
+        }
+        playerHand = sortTiles(playerHand);
+        state = "discard"; selectedIdx = null; render(true);
+    };
+
     const handleMainBtn = () => {
         if (state === "draw") {
             playerHand = sortTiles(playerHand);
@@ -227,31 +283,10 @@ const game = (() => {
         }
     };
 
-    const executeMeld = (type) => {
-        const lastD = discards.pop();
-        if (type === 'peng' || type === 'gang') {
-            const count = type === 'peng' ? 2 : 3;
-            for(let i=0; i<count; i++) playerHand.splice(playerHand.indexOf(lastD), 1);
-            playerMelds.push(new Array(count + 1).fill(lastD));
-            if (type === 'gang') { playerDrawTile = deck.pop(); selectedIdx = playerHand.length; }
-            else playerDrawTile = "WAIT";
-        } else if (type === 'chi') {
-            const v = parseInt(lastD), s = lastD.slice(-1);
-            // 決定吃哪一種組合 (123, 234, 345)
-            let combo = playerHand.includes(`${v-1}${s}`) && playerHand.includes(`${v+1}${s}`) ? [`${v-1}${s}`, `${v+1}${s}`] :
-                        playerHand.includes(`${v+1}${s}`) && playerHand.includes(`${v+2}${s}`) ? [`${v+1}${s}`, `${v+2}${s}`] : [`${v-2}${s}`, `${v-1}${s}`];
-            combo.forEach(t => playerHand.splice(playerHand.indexOf(t), 1));
-            playerMelds.push(sortTiles([...combo, lastD]));
-            playerDrawTile = "WAIT";
-        }
-        playerHand = sortTiles(playerHand);
-        state = "discard"; selectedIdx = null; render(true);
-    };
-
     const opponentAI = (lastD) => {
         if (isMahjong([...oppHand, lastD])) { handleWin(false, "放槍"); return; }
         const count = oppHand.filter(x => x === lastD).length;
-        if (count >= 2 && lastD.includes('z')) { // AI 碰到字對必碰
+        if (count >= 2 && lastD.includes('z')) {
             for(let i=0; i<count; i++) oppHand.splice(oppHand.indexOf(lastD), 1);
             oppMelds.push(new Array(count + 1).fill(lastD));
             discards.push(oppHand.splice(Math.floor(Math.random()*oppHand.length), 1)[0]);
@@ -276,7 +311,7 @@ const game = (() => {
         setTimeout(() => { alert(`${isP?'恭喜胡牌！':'對手胡牌'} \n類型：${type}`); init(); }, 500);
     };
 
-    return { init, handleMainBtn, executeMeld, checkPlayerWin };
+    return { init, handleMainBtn, executeMeld, checkPlayerWin, openChiSelector, closeChiSelector };
 })();
 window.onload = game.init;
 </script>
