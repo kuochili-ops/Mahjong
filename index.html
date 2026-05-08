@@ -17,16 +17,12 @@
         .tile-sm.back { background: #c62828; border: 1px solid white; width: 20px; height: 28px; }
 
         .mahjong-area { flex: 1; display: flex; flex-direction: column; justify-content: space-between; width: 100%; max-width: 500px; padding: 5px; box-sizing: border-box; overflow: hidden; }
-        
-        /* 海底 */
         .discard-area { background: rgba(0,0,0,0.2); border-radius: 10px; height: 130px; margin: 10px 5px; display: grid; grid-template-columns: repeat(9, 1fr); gap: 4px; padding: 10px; overflow-y: auto; }
         .discard-tile { width: 24px; margin: 0 auto; }
         .discard-tile.last { border: 2px solid var(--gold); box-shadow: 0 0 8px var(--gold); }
 
-        /* 玩家手牌捲動區域 */
         .hand-scroll-view { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; scroll-behavior: smooth; padding: 15px 0; }
         .hand-container-inner { display: flex; align-items: flex-end; min-width: max-content; padding: 0 30px; gap: 3px; }
-        
         .tile { width: var(--tile-w); cursor: pointer; transition: transform 0.2s; position: relative; flex-shrink: 0; }
         .tile img { width: 100%; border-radius: 3px; display: block; box-shadow: 1px 1px 3px rgba(0,0,0,0.4); }
         .tile.selected { transform: translateY(-15px); }
@@ -37,6 +33,9 @@
         .btn.active { background: #fff; color: #333; pointer-events: auto; box-shadow: 0 4px 0 #ccc; }
         .btn.can-win { background: var(--gold) !important; color: #000; animation: win-glow 0.6s infinite alternate; pointer-events: auto; }
         
+        .chi-selector-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; justify-content: center; align-items: center; z-index: 100; }
+        .chi-options { background: #444; padding: 20px; border-radius: 15px; border: 2px solid var(--gold); display: flex; gap: 15px; flex-wrap: wrap; justify-content: center; }
+
         .win-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); display:none; flex-direction:column; justify-content:center; align-items:center; z-index:200; }
         .win-card { background:#fff; color:#333; width:85%; max-width:320px; border-radius:15px; padding:20px; text-align:center; }
         
@@ -56,9 +55,9 @@
 <div class="mahjong-area">
     <div id="discardPile" class="discard-area"></div>
     <div class="action-bar">
-        <button id="btn-chi" class="btn">吃</button>
-        <button id="btn-peng" class="btn">碰</button>
-        <button id="btn-gang" class="btn">槓</button>
+        <button id="btn-chi" class="btn" onclick="game.openChiSelector()">吃</button>
+        <button id="btn-peng" class="btn" onclick="game.executeMeld('peng')">碰</button>
+        <button id="btn-gang" class="btn" onclick="game.executeMeld('gang')">槓</button>
         <button id="btn-win" class="btn" onclick="game.checkPlayerWin()">胡</button>
     </div>
     <div id="playerMelds" style="display:flex; gap:8px; padding-left:30px; min-height:35px;"></div>
@@ -72,6 +71,10 @@
 
 <div class="control-panel">
     <button id="btn-main-action" class="btn-main" onclick="game.handleMainBtn()">摸牌</button>
+</div>
+
+<div id="chiSelector" class="chi-selector-overlay" onclick="game.closeChiSelector(event)">
+    <div class="chi-options" id="chiOptionsContainer"></div>
 </div>
 
 <div id="winOverlay" class="win-overlay">
@@ -103,8 +106,7 @@ const game = (() => {
         for (let eye in counts) {
             if (counts[eye] >= 2) {
                 const temp = [...h];
-                temp.splice(temp.indexOf(eye), 1);
-                temp.splice(temp.indexOf(eye), 1);
+                temp.splice(temp.indexOf(eye), 1); temp.splice(temp.indexOf(eye), 1);
                 if (validate(temp)) return true;
             }
         }
@@ -157,10 +159,24 @@ const game = (() => {
             else oppUI.innerHTML += `<div class="opp-hand-back"></div>`;
         });
 
+        // 按鈕邏輯
         const lastD = discards[discards.length-1];
         const canWin = isMahjong(playerDrawTile ? [...playerHand, playerDrawTile] : (lastD ? [...playerHand, lastD] : []));
         document.getElementById('btn-win').className = `btn ${canWin ? 'can-win' : ''}`;
         
+        const chiBtn = document.getElementById('btn-chi'), pengBtn = document.getElementById('btn-peng'), gangBtn = document.getElementById('btn-gang');
+        chiBtn.className = 'btn'; pengBtn.className = 'btn'; gangBtn.className = 'btn';
+        
+        if (state === "draw" && lastD) {
+            if (playerHand.filter(x => x === lastD).length >= 2) pengBtn.classList.add('active');
+            if (playerHand.filter(x => x === lastD).length >= 3) gangBtn.classList.add('active');
+            const v = parseInt(lastD), s = lastD.slice(-1);
+            if (s !== 'z' && ((playerHand.includes(`${v-2}${s}`)&&playerHand.includes(`${v-1}${s}`)) || (playerHand.includes(`${v-1}${s}`)&&playerHand.includes(`${v+1}${s}`)) || (playerHand.includes(`${v+1}${s}`)&&playerHand.includes(`${v+2}${s}`)))) chiBtn.classList.add('active');
+        } else if (state === "discard" && playerDrawTile) {
+            const counts = {}; [...playerHand, playerDrawTile].forEach(t => counts[t] = (counts[t] || 0) + 1);
+            if (Object.values(counts).some(v => v === 4)) gangBtn.classList.add('active');
+        }
+
         const pt = document.getElementById('playerTiles'); pt.innerHTML = '';
         playerHand.forEach((t, i) => {
             const div = document.createElement('div');
@@ -185,14 +201,58 @@ const game = (() => {
         document.getElementById('discardPile').innerHTML = discards.map((t,idx) => `<img class="discard-tile ${idx===discards.length-1?'last':''}" src="${svgBase}${t}.svg">`).join('');
         document.getElementById('btn-main-action').innerText = state === "discard" ? "選一張放出" : "摸牌";
 
-        // 自動捲動功能：摸牌後移動到最右側
-        if (autoScroll) {
-            setTimeout(() => {
-                const scrollArea = document.getElementById('handScroll');
-                scrollArea.scrollLeft = scrollArea.scrollWidth;
-            }, 100);
+        if (autoScroll) setTimeout(() => {
+            const scrollArea = document.getElementById('handScroll');
+            scrollArea.scrollLeft = scrollArea.scrollWidth;
+        }, 100);
+    };
+
+    const executeMeld = (type, chiCombo = null) => {
+        if (type === 'gang' && state === "discard") { 
+            let all = [...playerHand, playerDrawTile];
+            const counts = {}; all.forEach(t => counts[t] = (counts[t] || 0) + 1);
+            const target = Object.keys(counts).find(k => counts[k] === 4);
+            for(let i=0; i<4; i++) all.splice(all.indexOf(target), 1);
+            playerHand = sortTiles(all); playerMelds.push({tiles: new Array(4).fill(target), isAnGang: true});
+            playerDrawTile = deck.pop(); selectedIdx = playerHand.length;
+            render(true); return;
+        }
+        const lastD = discards.pop();
+        if (type === 'peng' || type === 'gang') { 
+            const count = type === 'peng' ? 2 : 3;
+            for(let i=0; i<count; i++) playerHand.splice(playerHand.indexOf(lastD), 1);
+            playerMelds.push({tiles: new Array(count + 1).fill(lastD), isAnGang: false});
+            if (type === 'gang') { playerDrawTile = deck.pop(); selectedIdx = playerHand.length; }
+            else playerDrawTile = "WAIT";
+        } else if (type === 'chi') {
+            chiCombo.forEach(t => playerHand.splice(playerHand.indexOf(t), 1));
+            playerMelds.push({tiles: sortTiles([...chiCombo, lastD]), isAnGang: false});
+            playerDrawTile = "WAIT";
+        }
+        playerHand = sortTiles(playerHand); state = "discard"; selectedIdx = null; render(true);
+    };
+
+    const openChiSelector = () => {
+        const lastD = discards[discards.length - 1]; if (!lastD) return;
+        const v = parseInt(lastD), s = lastD.slice(-1);
+        const combos = []; const has = (n) => playerHand.includes(`${n}${s}`);
+        if (has(v-2) && has(v-1)) combos.push([`${v-2}${s}`, `${v-1}${s}`]);
+        if (has(v-1) && has(v+1)) combos.push([`${v-1}${s}`, `${v+1}${s}`]);
+        if (has(v+1) && has(v+2)) combos.push([`${v+1}${s}`, `${v+2}${s}`]);
+        if (combos.length === 1) executeMeld('chi', combos[0]);
+        else if (combos.length > 1) {
+            const container = document.getElementById('chiOptionsContainer'); container.innerHTML = '';
+            combos.forEach(c => {
+                const opt = document.createElement('div'); opt.style.display='flex'; opt.style.gap='3px';
+                opt.innerHTML = sortTiles([...c, lastD]).map(t=>`<img class="tile-sm" src="${svgBase}${t}.svg">`).join('');
+                opt.onclick = () => { executeMeld('chi', c); closeChiSelector(); };
+                container.appendChild(opt);
+            });
+            document.getElementById('chiSelector').style.display = 'flex';
         }
     };
+
+    const closeChiSelector = (e) => { if (!e || e.target.id === 'chiSelector') document.getElementById('chiSelector').style.display = 'none'; };
 
     const opponentAI = (lastD) => {
         if (lastD && isMahjong([...oppHand, lastD])) { handleWin(false, false); return; }
@@ -201,8 +261,7 @@ const game = (() => {
             if (count >= 2 && Math.random() > 0.4) {
                 for(let i=0; i<count; i++) oppHand.splice(oppHand.indexOf(lastD), 1);
                 oppMelds.push({tiles: new Array(count + 1).fill(lastD), isAnGang: false});
-                discards.pop();
-                if (count === 3) { opponentAI(null); return; }
+                discards.pop(); if (count === 3) { opponentAI(null); return; }
                 aiDiscard(); return;
             }
         }
@@ -226,9 +285,7 @@ const game = (() => {
 
     const handleMainBtn = () => {
         if (state === "draw") {
-            playerDrawTile = deck.pop(); selectedIdx = playerHand.length;
-            state = "discard"; 
-            render(true); // 觸發自動捲動
+            playerDrawTile = deck.pop(); selectedIdx = playerHand.length; state = "discard"; render(true);
         } else if (state === "discard" && selectedIdx !== null) {
             let all = [...playerHand]; if(playerDrawTile && playerDrawTile !== "WAIT") all.push(playerDrawTile);
             const disc = all.splice(selectedIdx, 1)[0];
@@ -250,7 +307,7 @@ const game = (() => {
         else if (isMahjong([...playerHand, lastD])) { discards.pop(); handleWin(true, false); }
     };
 
-    return { init, handleMainBtn, checkPlayerWin };
+    return { init, handleMainBtn, checkPlayerWin, executeMeld, openChiSelector, closeChiSelector };
 })();
 window.onload = game.init;
 </script>
